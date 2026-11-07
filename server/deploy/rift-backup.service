@@ -1,0 +1,7 @@
+[Unit]
+Description=Spell and Iron Rift world backup
+
+[Service]
+Type=oneshot
+User=rift
+ExecStart=/opt/rift/server/backup.sh /opt/rift/server/runtime /var/lib/rift/backups 14

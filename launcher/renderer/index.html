@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: https://textures.minecraft.net; style-src 'self' 'unsafe-inline'; script-src 'self'; font-src 'self' data:; connect-src 'self'">
+<title>Spell and Iron Rift</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<canvas id="scene" aria-hidden="true"></canvas>
+
+<header class="titlebar">
+  <div class="titlebar__brand"><svg viewBox="0 0 32 32" aria-hidden="true"><use href="#rift-sigil"/></svg><span>Spell and Iron Rift</span></div>
+  <div class="titlebar__drag"></div>
+  <div class="titlebar__lang" id="langSwitch"></div>
+  <div class="titlebar__win">
+    <button type="button" data-win="min" aria-label="Minimize"><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></button>
+    <button type="button" data-win="max" aria-label="Maximize"><svg viewBox="0 0 10 10"><rect x="1.5" y="1.5" width="7" height="7"/></svg></button>
+    <button type="button" data-win="close" class="is-close" aria-label="Close"><svg viewBox="0 0 10 10"><path d="M1.5 1.5l7 7M8.5 1.5l-7 7"/></svg></button>
+  </div>
+</header>
+
+<div class="demo-banner" id="demoBanner" hidden></div>
+
+<div class="shell">
+  <nav class="rail" aria-label="Main">
+    <button type="button" class="rail__item is-active" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9h-6v-6H9v6H3z"/></svg><span data-i18n="nav.home"></span></button>
+    <button type="button" class="rail__item" data-view="news"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 9h8M8 13h8M8 17h5"/></svg><span data-i18n="nav.news"></span></button>
+    <button type="button" class="rail__item" data-view="settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM19 12l2-1-1-3-2 .3-1.4-1.4.3-2-3-1-1 2h-2l-1-2-3 1 .3 2L6 7.3 4 7 3 10l2 1v2l-2 1 1 3 2-.3 1.4 1.4-.3 2 3 1 1-2h2l1 2 3-1-.3-2 1.4-1.4 2 .3 1-3-2-1z"/></svg><span data-i18n="nav.settings"></span></button>
+    <div class="rail__spacer"></div>
+    <button type="button" class="rail__item rail__profile" data-view="profile"><canvas class="avatar" width="8" height="8" data-avatar></canvas><span data-i18n="nav.profile"></span></button>
+  </nav>
+
+  <main class="stage">
+    <!-- HOME -->
+    <section class="view view--home is-active" data-view="home">
+      <div class="home__left">
+        <div class="logo" aria-label="Spell and Iron Rift">
+          <svg class="logo__sigil" viewBox="0 0 120 120" aria-hidden="true"><use href="#rift-sigil-big"/></svg>
+          <div class="logo__words">
+            <span class="logo__top">Spell <i>&amp;</i> Iron</span>
+            <span class="logo__main">Rift</span>
+          </div>
+        </div>
+
+        <div class="cards">
+          <article class="card card--server" id="serverCard">
+            <header class="card__head"><span class="eyebrow" data-i18n="server.title"></span><span class="pill" id="serverPill"></span></header>
+            <div class="server__row">
+              <div class="server__count"><b id="playersOnline">—</b><small>/ <span id="playersMax">—</span></small></div>
+              <div class="server__meta"><span id="serverAddr">play.spellandiron.net</span><span id="serverPing"></span></div>
+            </div>
+            <div class="meter"><i id="playersMeter"></i></div>
+          </article>
+
+          <article class="card card--build" id="buildCard">
+            <header class="card__head"><span class="eyebrow" data-i18n="build.title"></span><span class="pill" id="buildPill"></span></header>
+            <div class="build__row">
+              <div><small data-i18n="build.current"></small><b id="buildCurrent">—</b></div>
+              <div class="build__arrow" id="buildArrow" hidden>→</div>
+              <div id="buildLatestWrap" hidden><small data-i18n="build.latest"></small><b id="buildLatest">—</b></div>
+            </div>
+            <p class="build__note" id="buildNote"></p>
+          </article>
+        </div>
+      </div>
+
+      <aside class="home__news">
+        <header class="section-head"><h2 data-i18n="news.title"></h2><button type="button" class="link" data-goto="news" data-i18n="news.more"></button></header>
+        <div class="news-list" id="newsShort"></div>
+      </aside>
+
+      <footer class="launchbar">
+        <div class="launchbar__profile" id="profileChip"></div>
+        <div class="launchbar__progress" id="progress" hidden>
+          <div class="progress__label"><span id="progressStage"></span><span id="progressPct"></span></div>
+          <div class="progress__track"><i id="progressBar"></i></div>
+          <div class="progress__detail" id="progressDetail"></div>
+        </div>
+        <button type="button" class="btn-play" id="playBtn">
+          <span class="btn-play__runes" aria-hidden="true"></span>
+          <span class="btn-play__label" id="playLabel"></span>
+        </button>
+      </footer>
+    </section>
+
+    <!-- NEWS -->
+    <section class="view view--news" data-view="news">
+      <header class="section-head"><h2 data-i18n="news.title"></h2></header>
+      <div class="news-list news-list--full" id="newsFull"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view view--settings" data-view="settings">
+      <header class="section-head"><h2 data-i18n="nav.settings"></h2><span class="toast" id="savedToast" hidden data-i18n="settings.saved"></span></header>
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" class="tab is-active" data-tab="game" data-i18n="settings.game"></button>
+        <button type="button" role="tab" class="tab" data-tab="graphics" data-i18n="settings.graphics"></button>
+        <button type="button" role="tab" class="tab" data-tab="language" data-i18n="settings.language"></button>
+        <button type="button" role="tab" class="tab" data-tab="maintenance" data-i18n="settings.maintenance"></button>
+      </div>
+
+      <div class="tabpanel is-active" data-tab="game">
+        <div class="field">
+          <label for="memory" data-i18n="settings.memory"></label>
+          <div class="slider"><input type="range" id="memory" min="2048" max="16384" step="512"><output id="memoryOut"></output></div>
+          <p class="hint" id="memoryHint"></p>
+        </div>
+        <div class="field">
+          <span class="label" data-i18n="settings.java"></span>
+          <div class="segmented">
+            <label><input type="radio" name="java" value="auto" id="javaAuto"><span data-i18n="settings.java.auto"></span></label>
+            <label><input type="radio" name="java" value="custom" id="javaCustom"><span data-i18n="settings.java.custom"></span></label>
+          </div>
+          <div class="pathrow" id="javaPathRow" hidden><code id="javaPath"></code><button type="button" class="btn" id="pickJava" data-i18n="settings.java.pick"></button></div>
+        </div>
+        <div class="field"><label for="jvmArgs" data-i18n="settings.jvmArgs"></label><input type="text" id="jvmArgs" spellcheck="false" placeholder="-XX:+UseStringDeduplication"></div>
+        <div class="field field--row">
+          <div><label for="resW" data-i18n="settings.resolution"></label><div class="res"><input type="number" id="resW" min="854" max="7680"> × <input type="number" id="resH" min="480" max="4320"></div></div>
+          <label class="switch"><input type="checkbox" id="fullscreen"><span></span><b data-i18n="settings.fullscreen"></b></label>
+        </div>
+        <div class="field"><span class="label" data-i18n="settings.installDir"></span><div class="pathrow"><code id="installDir"></code><button type="button" class="btn" id="pickDir" data-i18n="settings.change"></button></div></div>
+        <div class="field field--row">
+          <label class="switch"><input type="checkbox" id="closeOnLaunch"><span></span><b data-i18n="settings.closeOnLaunch"></b></label>
+          <div><label for="channel" data-i18n="settings.channel"></label>
+            <select id="channel"><option value="stable" data-i18n="settings.channel.stable"></option><option value="testing" data-i18n="settings.channel.testing"></option></select></div>
+        </div>
+      </div>
+
+      <div class="tabpanel" data-tab="graphics">
+        <div class="hw" id="hwBox"></div>
+        <label class="switch"><input type="checkbox" id="presetAuto"><span></span><b data-i18n="gfx.auto"></b></label>
+        <div class="presets" id="presets"></div>
+      </div>
+
+      <div class="tabpanel" data-tab="language">
+        <div class="langs" id="langCards"></div>
+      </div>
+
+      <div class="tabpanel" data-tab="maintenance">
+        <div class="maint">
+          <div class="maint__item"><div><b data-i18n="maint.repair"></b><p data-i18n="maint.repair.d"></p></div><button type="button" class="btn" id="repairBtn" data-i18n="maint.repair"></button></div>
+          <div class="maint__item"><div><b data-i18n="maint.rollback"></b><p data-i18n="maint.rollback.d"></p></div><button type="button" class="btn" id="rollbackBtn" data-i18n="maint.rollback"></button></div>
+          <div class="maint__item"><div class="maint__links"><button type="button" class="btn btn--ghost" id="openGameDir" data-i18n="maint.folder"></button><button type="button" class="btn btn--ghost" id="openLogs" data-i18n="maint.logs"></button></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROFILE -->
+    <section class="view view--profile" data-view="profile">
+      <header class="section-head"><h2 data-i18n="nav.profile"></h2></header>
+      <div class="profile" id="profileView"></div>
+    </section>
+  </main>
+</div>
+
+<!-- Microsoft device-code sign in -->
+<div class="modal" id="loginModal" hidden role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+  <div class="modal__panel">
+    <h3 id="loginTitle" data-i18n="login.title"></h3>
+    <ol class="steps">
+      <li><span data-i18n="login.step1"></span><button type="button" class="btn" id="loginOpen" data-i18n="login.open"></button><code id="loginUrl"></code></li>
+      <li><span data-i18n="login.step2"></span><div class="code" id="loginCode">— — — —</div><button type="button" class="btn btn--ghost" id="loginCopy" data-i18n="login.copy"></button></li>
+    </ol>
+    <p class="waiting"><span class="spinner" aria-hidden="true"></span><span data-i18n="login.waiting"></span></p>
+    <p class="hint" data-i18n="profile.secure"></p>
+    <button type="button" class="btn btn--ghost" id="loginCancel" data-i18n="play.cancel"></button>
+  </div>
+</div>
+
+<div class="alert" id="alert" hidden role="alert"><p id="alertText"></p><div><button type="button" class="btn" id="alertRetry" data-i18n="retry" hidden></button><button type="button" class="btn btn--ghost" id="alertClose" data-i18n="close"></button></div></div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="g-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3dfa6"/><stop offset=".45" stop-color="#c9a35b"/><stop offset="1" stop-color="#7d5e2b"/></linearGradient>
+    <linearGradient id="g-rift" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ad7ff"/><stop offset=".5" stop-color="#9a6bff"/><stop offset="1" stop-color="#5b2fd1"/></linearGradient>
+    <symbol id="rift-sigil" viewBox="0 0 32 32">
+      <path d="M16 2l12 7v14l-12 7-12-7V9z" fill="none" stroke="url(#g-gold)" stroke-width="2"/>
+      <path d="M17 6l-3 7 4 2-4 4 3 7" fill="none" stroke="url(#g-rift)" stroke-width="2.4" stroke-linejoin="bevel"/>
+    </symbol>
+    <symbol id="rift-sigil-big" viewBox="0 0 120 120">
+      <circle cx="60" cy="60" r="55" fill="none" stroke="url(#g-gold)" stroke-width="2.5"/>
+      <circle cx="60" cy="60" r="46" fill="none" stroke="#c9a35b" stroke-opacity=".45" stroke-width="1" stroke-dasharray="2 5"/>
+      <g stroke="#c9a35b" stroke-width="2" fill="none" stroke-linecap="square">
+        <path d="M60 2v8M60 110v8M2 60h8M110 60h8"/>
+        <path d="M18 18l6 6M96 96l6 6M102 18l-6 6M18 102l6-6"/>
+      </g>
+      <path d="M60 20l30 17v46L60 100 30 83V37z" fill="#0e0d14" stroke="url(#g-gold)" stroke-width="3"/>
+      <path d="M38 41h44M38 79h44" stroke="#6f6a7d" stroke-width="2"/>
+      <path d="M63 28l-8 18 11 6-12 12 9 28" fill="none" stroke="url(#g-rift)" stroke-width="5" stroke-linejoin="bevel"/>
+      <path d="M63 28l-8 18 11 6-12 12 9 28" fill="none" stroke="#e9dcff" stroke-width="1.4" stroke-linejoin="bevel"/>
+    </symbol>
+  </defs>
+</svg>
+
+<script src="i18n.js"></script>
+<script src="demo.js"></script>
+<script src="scene.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

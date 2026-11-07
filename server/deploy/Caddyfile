@@ -1,0 +1,11 @@
+# HTTPS in front of the backend (automatic Let's Encrypt certificates).
+rift.example.org {
+	encode zstd gzip
+	# Launcher downloads: large, immutable, range requests
+	@files path /files/*
+	header @files Cache-Control "public, max-age=31536000, immutable"
+	reverse_proxy 127.0.0.1:8080
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+	}
+}

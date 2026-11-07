@@ -1,0 +1,13 @@
+{
+  "name": "spell-and-iron-rift",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Spell and Iron Rift — launcher, update server, admin panel, NeoForge 1.21.1 client mod and server kit",
+  "workspaces": ["shared", "launcher", "backend"],
+  "scripts": {
+    "build": "npm run build -w shared && npm run build -w launcher && npm run build -w backend",
+    "test": "npm run build && npm test -w shared && npm test -w launcher && npm test -w backend",
+    "typecheck": "npm run typecheck -ws --if-present"
+  },
+  "engines": { "node": ">=20" }
+}

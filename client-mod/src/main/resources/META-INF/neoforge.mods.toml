@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "All rights reserved"
+
+[[mods]]
+modId = "spellironrift"
+version = "${mod_version}"
+displayName = "Spell and Iron Rift Core"
+authors = "Spell and Iron Rift team"
+description = '''
+Client interface of Spell and Iron Rift: custom main menu with the player's 3D character,
+direct connection to the official server, graphics presets and localization (ru, uk, en).
+'''
+# Client-only: servers and other clients do not need this mod.
+displayTest = "IGNORE_ALL_VERSION"
+
+[[dependencies.spellironrift]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1.0,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.spellironrift]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.21.2)"
+ordering = "NONE"
+side = "CLIENT"

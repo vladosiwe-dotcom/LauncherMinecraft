@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rift Control</title>
+<link rel="stylesheet" href="admin.css">
+</head>
+<body>
+<div class="demo-banner" id="demoBanner" hidden></div>
+
+<section class="login" id="loginView" hidden>
+  <form class="login__box" id="loginForm">
+    <div class="brand"><span class="brand__sigil" aria-hidden="true"></span><div><b>Rift Control</b><small>Spell and Iron Rift</small></div></div>
+    <label for="lu" data-t="login.username"></label><input id="lu" autocomplete="username" required>
+    <label for="lp" data-t="login.password"></label><input id="lp" type="password" autocomplete="current-password" required>
+    <p class="form-error" id="loginError" hidden></p>
+    <button type="submit" class="btn btn--gold" data-t="login.submit"></button>
+  </form>
+</section>
+
+<div class="app" id="appView" hidden>
+  <aside class="side">
+    <div class="brand"><span class="brand__sigil" aria-hidden="true"></span><div><b>Rift Control</b><small id="brandSub">Spell and Iron Rift</small></div></div>
+    <nav id="nav"></nav>
+    <div class="side__foot">
+      <div class="langs" id="langs"></div>
+      <div class="whoami"><b id="whoName"></b><small id="whoRole"></small></div>
+      <button type="button" class="btn btn--ghost btn--sm" id="logoutBtn" data-t="logout"></button>
+    </div>
+  </aside>
+  <div class="main">
+    <header class="top">
+      <button type="button" class="top__menu" id="menuBtn" aria-label="Menu">☰</button>
+      <h1 id="viewTitle"></h1>
+      <div class="top__server">
+        <span class="state" id="serverState"></span>
+        <button type="button" class="btn btn--sm" data-server="start" data-t="server.start"></button>
+        <button type="button" class="btn btn--sm" data-server="restart" data-t="server.restart"></button>
+        <button type="button" class="btn btn--sm btn--danger" data-server="stop" data-t="server.stop"></button>
+      </div>
+    </header>
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<div class="dialog" id="dialog" hidden role="dialog" aria-modal="true"><div class="dialog__box" id="dialogBox"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="i18n.js"></script>
+<script src="demo.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

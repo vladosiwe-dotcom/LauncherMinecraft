@@ -1,0 +1,33 @@
+{
+  "name": "@sir/launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Spell and Iron Rift launcher",
+  "type": "module",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/copy-fonts.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": { "@sir/shared": "0.1.0" },
+  "devDependencies": {
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.6.3",
+    "@types/node": "^22.10.0",
+    "@fontsource/cormorant-sc": "^5.1.0",
+    "@fontsource/rubik": "^5.1.0",
+    "@fontsource/press-start-2p": "^5.1.0"
+  },
+  "build": {
+    "appId": "org.spellandironrift.launcher",
+    "productName": "Spell and Iron Rift",
+    "files": ["dist/**", "renderer/**", "config/**", "package.json"],
+    "win": { "target": "nsis" },
+    "mac": { "target": "dmg" },
+    "linux": { "target": "AppImage" }
+  }
+}

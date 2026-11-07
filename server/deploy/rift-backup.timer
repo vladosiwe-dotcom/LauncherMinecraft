@@ -1,0 +1,10 @@
+# Daily world backup at 04:00 through the panel API is the default; this timer is for standalone servers.
+[Unit]
+Description=Daily Spell and Iron Rift world backup
+
+[Timer]
+OnCalendar=*-*-* 04:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

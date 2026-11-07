@@ -1,0 +1,7 @@
+{
+  "comment": "Public launcher configuration. Contains NO secrets: the Azure client id and Ed25519 public keys are public by design.",
+  "apiBase": "https://rift.example.org",
+  "azureClientId": "00000000-0000-0000-0000-000000000000",
+  "trustedManifestKeys": [],
+  "allowInsecureLocalApi": false
+}

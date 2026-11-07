@@ -1,0 +1,16 @@
+node_modules/
+dist/
+*.log
+.DS_Store
+# backend runtime data (users, sessions, content store, keys)
+backend/data/
+# launcher packaging output
+launcher/release/
+# Gradle
+client-mod/.gradle/
+client-mod/build/
+client-mod/run/
+# server runtime
+server/runtime/
+server/backups/
+launcher/renderer/fonts/
