@@ -1,7 +1,7 @@
 // In-browser stand-in for the Rift Control API, used only when the panel is opened outside the backend
 // (design preview). Sample data, clearly labelled by the demo banner. The real panel lives at /admin on the backend.
 (() => {
-  if (location.pathname.startsWith('/admin')) return;
+  if (location.pathname.startsWith('/admin/') && !window.RIFT_FORCE_DEMO) return;
   const now = Date.now();
   const iso = (msAgo) => new Date(now - msAgo).toISOString();
   const H = 3600e3, D = 24 * H;

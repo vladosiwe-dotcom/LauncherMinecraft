@@ -1,0 +1,108 @@
+<title>Spell and Iron Rift</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@600;700&family=Rubik:wght@400;500&display=swap">
+<style>
+/* Layout: one header band, a tab strip, then the live screen scaled to the column width; notes under it. */
+:root {
+  color-scheme: dark;
+  --bg: #08070c; --panel: #121019; --line: #29253a; --text: #ebe6f3; --dim: #a49db4; --faint: #6e6880;
+  --gold: #c9a35b; --gold-hi: #f3dfa6; --violet: #9a6bff; --arcane: #5fc8ff;
+  --display: 'Cormorant SC', Georgia, serif; --body: 'Rubik', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 400 15px/1.55 var(--body); }
+.wrap { max-width: 1320px; margin: 0 auto; padding-block: 28px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: flex; flex-direction: column; gap: 20px; }
+header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.sigil { width: 40px; height: 46px; flex: none; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); background: linear-gradient(180deg, var(--gold-hi), var(--gold) 50%, #6f5226); position: relative; }
+.sigil::after { content: ''; position: absolute; inset: 3px; clip-path: inherit; background: linear-gradient(180deg, #2a1c55, #0d0b14); }
+.sigil::before { content: ''; position: absolute; left: 17px; top: 9px; width: 6px; height: 28px; z-index: 1; background: linear-gradient(180deg, var(--arcane), var(--violet)); box-shadow: 0 0 10px var(--violet); transform: skewX(-14deg); }
+h1 { margin: 0; font: 700 clamp(28px, 4vw, 40px)/1 var(--display); letter-spacing: .06em; color: var(--gold-hi); text-wrap: balance; }
+header p { margin: 4px 0 0; color: var(--dim); max-width: 70ch; }
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; }
+.tabs a { padding: 10px 18px; color: var(--dim); text-decoration: none; font: 700 19px var(--display); letter-spacing: .06em; white-space: nowrap; border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs a:hover { color: var(--text); }
+.tabs a[aria-current="page"] { color: var(--gold-hi); border-bottom-color: var(--gold); }
+.tabs a:focus-visible { outline: 2px solid var(--arcane); outline-offset: -2px; }
+.screen { position: relative; width: 100%; overflow: hidden; background: #000; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(0,0,0,.5); }
+.screen iframe { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #000; }
+.notes { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 20px; }
+.notes section { background: var(--panel); border: 1px solid var(--line); padding: 16px 18px; min-width: 0; }
+.notes h2 { margin: 0 0 8px; font: 700 20px var(--display); letter-spacing: .05em; color: var(--gold-hi); }
+.notes ul { margin: 0; padding-left: 18px; color: var(--dim); }
+.notes li { margin: 4px 0; }
+.notes li b { color: var(--text); font-weight: 500; }
+.status { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--dim); }
+.status div { display: flex; gap: 10px; align-items: baseline; }
+.chip { flex: none; font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border: 1px solid var(--line); }
+.chip.ok { color: #62d68f; border-color: #2d5e42; } .chip.mid { color: #f0b64c; border-color: #66502a; } .chip.demo { color: var(--arcane); border-color: #24506a; }
+[hidden] { display: none !important; }
+@media (max-width: 860px) { .notes { grid-template-columns: minmax(0, 1fr); } }
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="sigil" aria-hidden="true"></div>
+    <div><h1>Spell and Iron Rift</h1><p>Лаунчер, главное меню внутри игры и панель управления сервером. Всё ниже работает в демо-режиме с примерными данными: кнопки нажимаются, но игра и сервер не подключены.</p></div>
+  </header>
+
+  <nav class="tabs" aria-label="Screens">
+    <a href="#launcher" data-tab="launcher">Лаунчер</a>
+    <a href="#menu" data-tab="menu">Меню в игре</a>
+    <a href="#control" data-tab="control">Rift Control</a>
+  </nav>
+
+  <div class="screen" id="screen"><iframe id="frame" title="Spell and Iron Rift screen"></iframe></div>
+
+  <div class="notes">
+    <section id="try"></section>
+    <section><h2>Что в коде</h2><div class="status" id="status"></div></section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const TABS = {
+    launcher: { src: 'launcher.html', w: 1280, h: 780,
+      title: 'Попробуйте в лаунчере',
+      items: ['<b>Обновить и играть</b>: имитация загрузки только изменённых файлов сборки 0.3.1 → 0.3.2', '<b>Настройки → Графика</b>: найденное железо и рекомендованный пресет; выключите «Подбирать автоматически», чтобы выбрать вручную', '<b>RU / UA / EN</b> в заголовке окна переключают язык всего интерфейса', '<b>Профиль</b>: скин, Classic/Slim, выход из аккаунта'],
+      status: [['ok', 'Ядро обновлений, установщик, запуск, вход Microsoft написаны; 9 тестов, включая докачку и откат'], ['demo', 'В превью вместо Electron подставлены примерные данные']] },
+    menu: { src: 'menu.html', w: 1280, h: 720,
+      title: 'Попробуйте в меню',
+      items: ['Водите мышью: персонаж поворачивает голову и корпус за курсором', 'Наведите на кнопку — персонаж смотрит на неё', '<b>Войти в пространство</b>: жест заклинания и подключение к серверу', '<b>Персонаж</b>: потяните мышью по сцене, чтобы повернуть модель', '<b>Настройки</b>: 4 графических профиля и язык'],
+      status: [['mid', 'В игре это рисует мод NeoForge (client-mod/). Код написан, но ещё не собран: в среде разработки закрыт доступ к maven NeoForge'], ['demo', 'Здесь та же раскладка и поведение, воспроизведённые в браузере; персонаж собран из настоящей раскладки скина 64×64']] },
+    control: { src: 'admin.html', w: 0, h: 860,
+      title: 'Попробуйте в Rift Control',
+      items: ['<b>Сборки → 0.3.3 (черновик)</b>: проверка нашла недостающую зависимость, публикация заблокирована', 'Добавьте Player Animator из списка «Добавить из библиотеки» — ошибка исчезнет, и можно публиковать', '<b>Консоль</b>: живой лог и отправка команд (попробуйте <code>list</code>)', '<b>Моды и ресурспаки</b>: Fabric-мод помечен как несовместимый', '<b>Игроки</b>, <b>Бэкапы</b>, <b>Администрация</b>, <b>Журнал действий</b>'],
+      status: [['ok', 'API и интерфейс панели работают на бэкенде; 8 тестов: роли, CSRF, загрузка модов, публикация с подписью, откат'], ['demo', 'В превью панель работает без сервера: действия хранятся в памяти браузера']] },
+  };
+  const frame = document.getElementById('frame'), screen = document.getElementById('screen');
+  let current = null;
+  function fit() {
+    const tab = TABS[current]; if (!tab) return;
+    const cw = screen.clientWidth;
+    if (tab.w) {
+      const s = cw / tab.w;
+      frame.style.width = tab.w + 'px'; frame.style.height = tab.h + 'px'; frame.style.transform = `scale(${s})`;
+      screen.style.height = Math.round(tab.h * s) + 'px';
+    } else {
+      frame.style.width = cw + 'px'; frame.style.height = tab.h + 'px'; frame.style.transform = 'none';
+      screen.style.height = tab.h + 'px';
+    }
+  }
+  function show(name) {
+    if (!TABS[name]) name = 'launcher';
+    if (name === current) return;
+    current = name;
+    const tab = TABS[name];
+    document.querySelectorAll('[data-tab]').forEach((a) => { if (a.dataset.tab === name) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
+    frame.src = tab.src;
+    document.getElementById('try').innerHTML = `<h2>${tab.title}</h2><ul>${tab.items.map((i) => `<li>${i}</li>`).join('')}</ul>`;
+    document.getElementById('status').innerHTML = tab.status.map(([k, txt]) => `<div><span class="chip ${k}">${k === 'ok' ? 'готово' : k === 'mid' ? 'не проверено' : 'демо'}</span><span>${txt}</span></div>`).join('');
+    fit();
+  }
+  addEventListener('hashchange', () => show(location.hash.slice(1)));
+  addEventListener('resize', fit);
+  show(location.hash.slice(1));
+})();
+</script>

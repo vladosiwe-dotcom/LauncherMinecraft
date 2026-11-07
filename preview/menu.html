@@ -1,0 +1,351 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rift Main Menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rubik:wght@400;500&display=swap">
+<style>
+/* In-game main menu concept. Mirrors client-mod/RiftMainMenuScreen: left menu, live 3D character right, rift location behind. */
+:root {
+  color-scheme: dark;
+  --ink: #07070b; --graphite: #15131c; --iron: #4a4757; --iron-lo: #23212c;
+  --gold-hi: #f3dfa6; --gold: #c9a35b; --gold-lo: #7d5e2b;
+  --violet: #9a6bff; --violet-lo: #4b2a9e; --arcane: #5fc8ff; --text: #ebe6f3; --dim: #a49db4;
+  --mc: 'Press Start 2P', ui-monospace, monospace;
+  --body: 'Rubik', system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--ink); color: var(--text); font-family: var(--body); user-select: none; }
+#world { position: absolute; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; }
+.stage { position: absolute; inset: 0; }
+
+.menu { position: absolute; left: 6%; top: 50%; transform: translateY(-42%); width: 300px; display: flex; flex-direction: column; gap: 10px; z-index: 3; }
+.logo { margin-bottom: 26px; }
+.logo small { display: block; font: 12px var(--mc); color: var(--gold); letter-spacing: 2px; text-shadow: 2px 2px 0 #241a0b; }
+.logo b { display: block; margin-top: 10px; font: 52px var(--mc); color: var(--gold-hi); text-shadow: 4px 4px 0 #241a0b, 0 0 30px rgba(154,107,255,.5); letter-spacing: 4px; }
+.logo i { display: block; height: 2px; width: 150px; margin-top: 12px; background: var(--gold-lo); position: relative; }
+.logo i::after { content: ''; position: absolute; right: -4px; top: -2px; width: 6px; height: 6px; background: var(--violet); box-shadow: 0 0 10px var(--violet); animation: pulse 2s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .4; } }
+
+.rb { position: relative; width: 100%; height: 46px; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 5px; border: 0; cursor: pointer; text-align: left; color: var(--text);
+  clip-path: polygon(4px 0, calc(100% - 4px) 0, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 0 calc(100% - 4px), 0 4px);
+  background: var(--iron); transition: background .25s; }
+.rb::before { content: ''; position: absolute; inset: 1px; clip-path: inherit; background: linear-gradient(180deg, rgba(31,28,41,.95), rgba(13,12,18,.95)); transition: background .25s; }
+.rb > * { position: relative; }
+.rb canvas { width: 36px; height: 36px; image-rendering: pixelated; background: #0b0a10; box-shadow: inset 0 0 0 1px var(--iron-lo); flex: none; transition: box-shadow .25s; }
+.rb span { font: 10px/1.5 var(--mc); letter-spacing: 1px; text-shadow: 2px 2px 0 #000; transition: color .25s, transform .25s; }
+.rb small { display: block; font: 8px var(--mc); color: var(--dim); margin-top: 4px; text-shadow: none; letter-spacing: 0; }
+.rb::after { content: ''; position: absolute; left: 50px; bottom: 5px; height: 1px; width: 0; background: var(--gold); transition: width .3s; }
+.rb:hover, .rb:focus-visible { background: var(--gold); outline: none; }
+.rb:hover::before, .rb:focus-visible::before { background: linear-gradient(180deg, rgba(43,31,72,.96), rgba(13,12,18,.96)); }
+.rb:hover span, .rb:focus-visible span { color: var(--gold-hi); transform: translateX(3px); }
+.rb:hover::after, .rb:focus-visible::after { width: calc(100% - 62px); }
+.rb:hover canvas, .rb:focus-visible canvas { box-shadow: inset 0 0 0 1px var(--gold-lo), 0 0 14px rgba(154,107,255,.6); }
+.rb-wrap { position: relative; }
+.rb-wrap::before { content: ''; position: absolute; inset: -4px; background: radial-gradient(closest-side, rgba(154,107,255,.35), transparent); opacity: 0; transition: opacity .3s; pointer-events: none; }
+.rb-wrap:hover::before { opacity: 1; }
+
+/* character */
+.hero { position: absolute; left: 72%; bottom: 10%; width: 0; height: 0; z-index: 2; perspective: 1400px; }
+.ring { position: absolute; left: -170px; top: -170px; width: 340px; height: 340px; border-radius: 50%; pointer-events: none; transform: rotateX(76deg); }
+.ring.a { border: 4px dotted rgba(95,200,255,.6); animation: spin 18s linear infinite; }
+.ring.b { left: -120px; top: -120px; width: 240px; height: 240px; border: 4px dashed rgba(154,107,255,.65); animation: spin 11s linear infinite reverse; }
+@keyframes spin { from { transform: rotateX(76deg) rotateZ(0deg); } to { transform: rotateX(76deg) rotateZ(360deg); } }
+.glow { position: absolute; left: -160px; top: -460px; width: 320px; height: 520px; background: radial-gradient(closest-side, rgba(154,107,255,.25), transparent); pointer-events: none; }
+.char { position: absolute; left: 0; top: 0; transform-style: preserve-3d; }
+.part, .face { position: absolute; transform-style: preserve-3d; }
+.face { background-repeat: no-repeat; image-rendering: pixelated; backface-visibility: hidden; }
+.face.inner { backface-visibility: visible; }
+
+.footer { position: absolute; left: 12px; bottom: 10px; font: 8px var(--mc); color: rgba(164,157,180,.75); z-index: 3; }
+.langs { position: absolute; right: 14px; top: 12px; display: flex; gap: 6px; z-index: 4; }
+.langs button { font: 8px var(--mc); padding: 6px 8px; background: rgba(13,12,18,.8); color: var(--dim); border: 1px solid var(--iron-lo); cursor: pointer; }
+.langs button.on { color: var(--gold-hi); border-color: var(--gold-lo); }
+
+.panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(620px, 92%); max-height: 80%; overflow: auto; padding: 18px 20px 20px; z-index: 5;
+  background: linear-gradient(180deg, rgba(24,22,34,.97), rgba(12,11,17,.97)); box-shadow: inset 0 0 0 1px var(--gold-lo), 0 20px 60px rgba(0,0,0,.6); }
+.panel h2 { margin: 0 0 14px; padding-bottom: 12px; border-bottom: 1px solid rgba(125,94,43,.7); font: 14px var(--mc); color: var(--gold-hi); text-shadow: 2px 2px 0 #000; }
+.panel h3 { font: 9px var(--mc); color: var(--gold); margin: 16px 0 8px; }
+.panel p { font-size: 13px; color: var(--dim); line-height: 1.5; margin: 0 0 10px; }
+.grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.grid4 .rb, .grid3 .rb { height: 40px; }
+.grid4 .rb span, .grid3 .rb span { font-size: 8px; }
+.grid4 .rb canvas, .grid3 .rb canvas { width: 28px; height: 28px; }
+.rb.sel { background: var(--gold); }
+.news-i { padding: 8px 0 12px 12px; border-left: 2px solid var(--violet); margin-bottom: 10px; }
+.news-i em { font: 7px var(--mc); color: var(--gold); font-style: normal; }
+.news-i b { display: block; font: 9px/1.6 var(--mc); margin: 6px 0; color: var(--text); }
+.toast { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); padding: 10px 16px; font: 9px var(--mc); background: rgba(13,12,18,.92); border: 1px solid var(--gold-lo); color: var(--gold-hi); z-index: 6; }
+.back { margin-top: 18px; width: 180px; }
+@media (max-width: 760px) {
+  .menu { left: 4%; width: 52%; }
+  .logo b { font-size: 34px; }
+  .hero { left: 78%; }
+  .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<canvas id="world"></canvas>
+<div class="stage">
+  <div class="langs" id="langs"></div>
+  <nav class="menu" id="menu">
+    <div class="logo"><small>SPELL &amp; IRON</small><b>RIFT</b><i></i></div>
+  </nav>
+  <div class="hero" id="hero"><div class="glow"></div><div class="ring a"></div><div class="ring b"></div><div class="char" id="char"></div></div>
+  <div class="footer" id="footer"></div>
+  <div class="panel" id="panel" hidden></div>
+  <div class="toast" id="toast" hidden></div>
+</div>
+<script>
+(() => {
+  const L = {
+    ru: { enter: 'Войти в пространство', character: 'Персонаж', settings: 'Настройки', news: 'Новости', quit: 'Выход', back: 'Назад', footer: 'Сборка 0.3.2 · NeoForge 1.21.1',
+      connecting: 'Подключение к play.spellandiron.net…', quitMsg: 'В игре эта кнопка закрывает Minecraft', charTitle: 'Персонаж', charText: 'Модель: Steve (классическая). Скин меняется в лаунчере: Профиль → Загрузить скин.', drag: 'Потяните мышью, чтобы повернуть',
+      setTitle: 'Настройки', gfx: 'Графический профиль', lang: 'Язык', presets: ['Минимальный', 'Сбалансированный', 'Высокий', 'Ультра'], vanilla: 'Все настройки Minecraft', setHint: 'Высокий и Ультра включают совместимые шейдеры. Если их нет, лаунчер скачает их при следующем запуске.',
+      newsTitle: 'Новости', newsItems: [['ОБНОВЛЕНИЕ · 05.11', 'Сборка 0.3.2: Цитадель Пепла', 'Новый данж с боссом Игнисом, переработанные школы огня и льда.'], ['СОБЫТИЕ · 02.11', 'Ночь Разлома — 9 ноября', 'Разломы открываются по всему миру. Награды: редкие свитки и руны.']] },
+    uk: { enter: 'Увійти в простір', character: 'Персонаж', settings: 'Налаштування', news: 'Новини', quit: 'Вихід', back: 'Назад', footer: 'Збірка 0.3.2 · NeoForge 1.21.1',
+      connecting: 'Підключення до play.spellandiron.net…', quitMsg: 'У грі ця кнопка закриває Minecraft', charTitle: 'Персонаж', charText: 'Модель: Steve (класична). Скін змінюється в лаунчері: Профіль → Завантажити скін.', drag: 'Потягніть мишею, щоб повернути',
+      setTitle: 'Налаштування', gfx: 'Графічний профіль', lang: 'Мова', presets: ['Мінімальний', 'Збалансований', 'Високий', 'Ультра'], vanilla: 'Усі налаштування Minecraft', setHint: 'Високий та Ультра вмикають сумісні шейдери. Якщо їх немає, лаунчер завантажить їх під час наступного запуску.',
+      newsTitle: 'Новини', newsItems: [['ОНОВЛЕННЯ · 05.11', 'Збірка 0.3.2: Цитадель Попелу', 'Новий данж із босом Ігнісом, перероблені школи вогню та льоду.'], ['ПОДІЯ · 02.11', 'Ніч Розлому — 9 листопада', 'Розломи відкриваються по всьому світу. Нагороди: рідкісні сувої та руни.']] },
+    en: { enter: 'Enter the Rift', character: 'Character', settings: 'Settings', news: 'News', quit: 'Quit', back: 'Back', footer: 'Build 0.3.2 · NeoForge 1.21.1',
+      connecting: 'Connecting to play.spellandiron.net…', quitMsg: 'In game this button closes Minecraft', charTitle: 'Character', charText: 'Model: Steve (classic). Change your skin in the launcher: Profile → Upload skin.', drag: 'Drag to rotate',
+      setTitle: 'Settings', gfx: 'Graphics profile', lang: 'Language', presets: ['Minimal', 'Balanced', 'High', 'Ultra'], vanilla: 'All Minecraft settings', setHint: 'High and Ultra enable compatible shaders. If missing, the launcher downloads them on the next start.',
+      newsTitle: 'News', newsItems: [['UPDATE · 05.11', 'Build 0.3.2: Citadel of Ash', 'A new dungeon with the boss Ignis, reworked fire and ice schools.'], ['EVENT · 02.11', 'Rift Night — Nov 9', 'Rifts open across the world. Rewards: rare scrolls and runes.']] },
+  };
+  let lang = 'ru', preset = 2;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // Same 5x7 rune bitmaps as RiftStyle.RUNES in the mod.
+  const RUNES = [[4, 14, 21, 4, 4, 4, 4], [14, 17, 14, 4, 31, 4, 10], [21, 14, 27, 14, 21, 4, 4], [31, 17, 23, 17, 23, 17, 31], [17, 10, 4, 10, 17, 0, 31]];
+  function runeCanvas(i) {
+    const c = document.createElement('canvas'); c.width = 9; c.height = 11; const g = c.getContext('2d');
+    g.fillStyle = '#7b52e6';
+    RUNES[i % 5].forEach((row, y) => { for (let x = 0; x < 5; x++) if (row >> (4 - x) & 1) g.fillRect(x + 2, y + 2, 1, 1); });
+    return c;
+  }
+
+  // ---------- skin: a "rift mage" painted procedurally in the standard 64x64 layout ----------
+  const skin = document.createElement('canvas'); skin.width = 64; skin.height = 64;
+  (() => {
+    const g = skin.getContext('2d');
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const shade = (hex, amt) => { const n = parseInt(hex.slice(1), 16); const f = (v) => Math.max(0, Math.min(255, v + amt)); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; };
+    const fill = (x, y, w, h, hex, noise = 10) => { for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) { g.fillStyle = shade(hex, Math.round((rnd() - 0.5) * noise * 2)); g.fillRect(x + i, y + j, 1, 1); } };
+    const px = (x, y, c) => { g.fillStyle = c; g.fillRect(x, y, 1, 1); };
+    const box = (u, v, w, h, d, col) => { fill(u + d, v, w, d, col.top); fill(u + d + w, v, w, d, col.bottom); fill(u, v + d, d, h, col.side); fill(u + d, v + d, w, h, col.front); fill(u + d + w, v + d, d, h, col.side); fill(u + d + w + d, v + d, w, h, col.back); };
+    const robe = '#2a2238', robeDk = '#1b1626', gold = '#c9a35b', skinC = '#c69276';
+    // head
+    box(0, 0, 8, 8, 8, { top: '#3a2a52', bottom: skinC, side: '#33264a', front: skinC, back: '#33264a' });
+    fill(8, 8, 8, 2, '#3a2a52'); fill(8, 10, 1, 4, '#33264a'); fill(15, 10, 1, 4, '#33264a');
+    px(10, 12, '#e9f6ff'); px(11, 12, '#5fc8ff'); px(13, 12, '#5fc8ff'); px(14, 12, '#e9f6ff');
+    fill(11, 14, 3, 1, '#8a5a48', 4); fill(9, 15, 6, 1, '#6b4636', 4);
+    // hood overlay (hat layer): sides and top only, open face
+    box(32, 0, 8, 8, 8, { top: '#2d2142', bottom: '#00000000', side: '#2d2142', front: '#2d2142', back: '#2d2142' });
+    g.clearRect(41, 10, 6, 6); g.clearRect(48, 8, 8, 8); fill(40, 8, 8, 2, '#2d2142'); px(40, 10, '#2d2142'); px(47, 10, '#2d2142');
+    fill(40, 9, 8, 1, gold, 6);
+    // body: robe with gold trim and a violet rune belt
+    box(16, 16, 8, 12, 4, { top: robe, bottom: robeDk, side: robeDk, front: robe, back: robeDk });
+    fill(23, 20, 2, 12, gold, 8); fill(20, 27, 8, 1, '#5b37c9', 6); px(24, 27, '#9a6bff');
+    fill(20, 20, 8, 1, gold, 6);
+    // arms: sleeves with gold cuffs, hands
+    const arm = (u, v) => { box(u, v, 4, 12, 4, { top: robe, bottom: skinC, side: robe, front: robe, back: robeDk }); fill(u + 4, v + 4 + 8, 4, 1, gold, 6); fill(u, v + 12, 16, 0, gold); fill(u + 4, v + 13, 4, 3, skinC); fill(u, v + 13, 4, 3, skinC); fill(u + 8, v + 13, 4, 3, skinC); fill(u + 12, v + 13, 4, 3, skinC); };
+    arm(40, 16); arm(32, 48);
+    // legs: dark robe hem, iron boots
+    const leg = (u, v) => { box(u, v, 4, 12, 4, { top: robeDk, bottom: '#4a4757', side: '#1e1a29', front: '#211c2e', back: '#1e1a29' }); for (const ox of [0, 4, 8, 12]) fill(u + ox, v + 13, 4, 3, '#55525f', 12); };
+    leg(0, 16); leg(16, 48);
+  })();
+  const SKIN_URL = skin.toDataURL();
+
+  // ---------- 3D character from CSS boxes ----------
+  const K = 10; // screen px per skin px
+  function face(w, h, u, v, transform, inner) {
+    const f = document.createElement('div');
+    f.className = `face${inner ? ' inner' : ''}`;
+    Object.assign(f.style, { width: `${w * K}px`, height: `${h * K}px`, left: `${-w * K / 2}px`, top: `${-h * K / 2}px`, backgroundImage: `url(${SKIN_URL})`, backgroundSize: `${64 * K}px ${64 * K}px`, backgroundPosition: `${-u * K}px ${-v * K}px`, transform });
+    return f;
+  }
+  function cuboid(u, v, w, h, d, grow = 1, inner = false) {
+    const p = document.createElement('div'); p.className = 'part';
+    const W = w * K * grow, H = h * K * grow, D = d * K * grow;
+    const s = grow;
+    p.append(
+      face(w, h, u + d, v + d, `scale(${s}) translateZ(${D / 2 / s}px)`, inner),
+      face(w, h, u + d + w + d, v + d, `scale(${s}) rotateY(180deg) translateZ(${D / 2 / s}px)`, inner),
+      face(d, h, u, v + d, `scale(${s}) rotateY(-90deg) translateZ(${W / 2 / s}px)`, inner),
+      face(d, h, u + d + w, v + d, `scale(${s}) rotateY(90deg) translateZ(${W / 2 / s}px)`, inner),
+      face(w, d, u + d, v, `scale(${s}) rotateX(90deg) translateZ(${H / 2 / s}px)`, inner),
+      face(w, d, u + d + w, v, `scale(${s}) rotateX(-90deg) translateZ(${H / 2 / s}px)`, inner),
+    );
+    return p;
+  }
+  // pivot groups: position in skin pixels relative to the feet centre (y up = negative)
+  function joint(x, y, child, cx, cy) { const j = document.createElement('div'); j.className = 'part'; j.style.transform = `translate3d(${x * K}px, ${y * K}px, 0)`; child.style.transform = `translate3d(${cx * K}px, ${cy * K}px, 0)`; j.append(child); return j; }
+  const root = document.getElementById('char');
+  const body = document.createElement('div'); body.className = 'part';
+  const torso = cuboid(16, 16, 8, 12, 4); torso.style.transform = `translate3d(0, ${-18 * K}px, 0)`;
+  const headPivot = document.createElement('div'); headPivot.className = 'part'; headPivot.style.transform = `translate3d(0, ${-24 * K}px, 0)`;
+  const headInner = document.createElement('div'); headInner.className = 'part';
+  const head = cuboid(0, 0, 8, 8, 8); head.style.transform = `translate3d(0, ${-4 * K}px, 0)`;
+  const hood = cuboid(32, 0, 8, 8, 8, 1.125, true); hood.style.transform = `translate3d(0, ${-4 * K}px, 0)`;
+  headInner.append(head, hood); headPivot.append(headInner);
+  const rArm = joint(-6, -22, cuboid(40, 16, 4, 12, 4), 0, 4);  // character's right = viewer's left
+  const lArm = joint(6, -22, cuboid(32, 48, 4, 12, 4), 0, 4);
+  const rLeg = joint(-2, -12, cuboid(0, 16, 4, 12, 4), 0, 6);
+  const lLeg = joint(2, -12, cuboid(16, 48, 4, 12, 4), 0, 6);
+  body.append(torso, headPivot, rArm, lArm);
+  root.append(rLeg, lLeg, body);
+
+  // ---------- behaviour: look at cursor / hovered button, idle, cast ----------
+  let mx = innerWidth / 2, my = innerHeight / 2, hovered = null, lastMove = performance.now();
+  let headYaw = 0, headPitch = 0, bodyYaw = 0, spin = 0, cast = 0, glance = 0, glanceTarget = null, nextGlance = 6;
+  addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; lastMove = performance.now(); });
+  const hero = document.getElementById('hero');
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    const t = now / 1000;
+    const r = hero.getBoundingClientRect();
+    const headX = r.left, headY = r.top - 27 * K * scaleNow;
+    let tx = mx, ty = my;
+    if (hovered) { const b = hovered.getBoundingClientRect(); tx = b.right; ty = b.top + b.height / 2; }
+    if (now - lastMove > 4000 && !hovered) {
+      nextGlance -= dt;
+      if (nextGlance <= 0 && glance <= 0) { glance = 1.6; nextGlance = 5 + Math.random() * 5; glanceTarget = [headX + (Math.random() - 0.5) * 600, headY + (Math.random() - 0.3) * 300]; }
+    }
+    if (glance > 0) { glance -= dt; [tx, ty] = glanceTarget; }
+    const dx = (tx - headX) / (160 * scaleNow), dy = (ty - headY) / (160 * scaleNow);
+    const k = Math.min(1, dt * 6);
+    headYaw += (Math.max(-55, Math.min(55, Math.atan(dx) * 57 * 1.1)) - headYaw) * k;
+    headPitch += (Math.max(-35, Math.min(40, Math.atan(dy) * 57 * 0.8)) - headPitch) * k;
+    bodyYaw += (Math.max(-25, Math.min(25, headYaw * 0.35)) - bodyYaw) * k * 0.6;
+    if (cast > 0) cast = Math.max(0, cast - dt);
+    const breathe = reduce ? 0 : Math.sin(t * 2.1) * 0.012;
+    const sway = reduce ? 0 : Math.sin(t * 1.35);
+    root.style.transform = `translateZ(0) rotateY(${bodyYaw + spin}deg) scaleY(${1 + breathe})`;
+    body.style.transform = `rotateZ(${reduce ? 0 : Math.sin(t * 0.45) * 1.1}deg)`;
+    headInner.style.transform = `rotateY(${headYaw - bodyYaw}deg) rotateX(${-headPitch}deg) rotateZ(${reduce ? 0 : Math.sin(t * 0.7) * 1.7}deg)`;
+    const castLift = cast > 0 ? Math.sin(((0.9 - cast) / 0.9) * Math.PI) : 0;
+    rArm.style.transform = `translate3d(${-6 * K}px, ${-22 * K}px, 0) rotateX(${sway * 2.9 + castLift * 137}deg) rotateZ(${-(3.4 + Math.cos(t * 1.1) * 2) - castLift * 14}deg)`;
+    lArm.style.transform = `translate3d(${6 * K}px, ${-22 * K}px, 0) rotateX(${-sway * 2.9}deg) rotateZ(${3.4 + Math.cos(t * 1.1) * 2}deg)`;
+    requestAnimationFrame(frame);
+  }
+
+  // ---------- scale to viewport ----------
+  let scaleNow = 1;
+  function fit() {
+    scaleNow = Math.max(0.45, Math.min(1.15, innerHeight / 820));
+    hero.style.transform = `scale(${scaleNow})`;
+    drawWorld();
+  }
+
+  // ---------- background: rift location (pixel ruins, floating islands, torn sky) ----------
+  const cv = document.getElementById('world'); const g = cv.getContext('2d');
+  let motes = [];
+  function drawWorld() {
+    const P = 6; const W = cv.width = Math.ceil(innerWidth / P); const H = cv.height = Math.ceil(innerHeight / P);
+    cv.style.width = '100%'; cv.style.height = '100%';
+    let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sky = g.createLinearGradient(0, 0, 0, H); sky.addColorStop(0, '#0b0816'); sky.addColorStop(0.5, '#21143c'); sky.addColorStop(0.75, '#140d24'); sky.addColorStop(1, '#060509');
+    g.fillStyle = sky; g.fillRect(0, 0, W, H);
+    for (let i = 0; i < W * H / 60; i++) { g.fillStyle = `rgba(230,220,255,${rnd() * 0.5})`; g.fillRect(Math.floor(rnd() * W), Math.floor(rnd() * H * 0.5), 1, 1); }
+    // rift tear
+    let x = Math.floor(W * 0.6), y = 0;
+    while (y < H * 0.55) { g.fillStyle = 'rgba(110,70,255,.35)'; g.fillRect(x - 3, y, 7, 2); g.fillStyle = 'rgba(120,210,255,.75)'; g.fillRect(x - 1, y, 3, 2); g.fillStyle = '#efe6ff'; g.fillRect(x, y, 1, 2); y += 2; if (rnd() < 0.45) x += Math.floor(rnd() * 3) - 1; }
+    const rg = g.createRadialGradient(W * 0.6, H * 0.3, 2, W * 0.6, H * 0.3, H * 0.7); rg.addColorStop(0, 'rgba(120,80,255,.35)'); rg.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = rg; g.fillRect(0, 0, W, H);
+    // floating islands
+    for (const [ix, iy, iw] of [[0.82, 0.22, 14], [0.42, 0.16, 9], [0.95, 0.42, 8]]) {
+      const cx = Math.floor(W * ix), cy = Math.floor(H * iy);
+      for (let r = 0; r < 6; r++) { const w = Math.max(1, iw - r * 2); g.fillStyle = r === 0 ? '#2f4a2a' : r === 1 ? '#3b2d24' : '#241b1a'; g.fillRect(cx - w, cy + r, w * 2, 1); }
+      g.fillStyle = 'rgba(154,107,255,.6)'; g.fillRect(cx, cy + 7, 1, 2);
+    }
+    // ruins: three layers
+    [[0.66, '#151024', 0.6], [0.76, '#0e0a17', 0.85], [0.88, '#07060b', 1]].forEach(([base, col, sc]) => {
+      let rx = -4;
+      while (rx < W + 4) {
+        const w = Math.round((3 + rnd() * 8) * sc), tall = rnd() < 0.25, h = Math.round(((tall ? 16 : 4) + rnd() * (tall ? 14 : 7)) * sc);
+        const top = Math.floor(H * base) - h;
+        g.fillStyle = col; g.fillRect(rx, top, w, H - top);
+        if (rnd() < 0.6) for (let bx = rx; bx < rx + w; bx += 2) g.fillRect(bx, top - 1, 1, 1);
+        if (tall && rnd() < 0.7) { g.fillStyle = 'rgba(154,107,255,.55)'; g.fillRect(rx + Math.floor(w / 2), top + 3, 1, 2); }
+        g.fillStyle = 'rgba(154,107,255,.08)'; g.fillRect(rx, top, w, 1);
+        rx += w + Math.round(rnd() * 3);
+      }
+    });
+    // left shade for the menu
+    const sh = g.createLinearGradient(0, 0, W * 0.5, 0); sh.addColorStop(0, 'rgba(7,7,11,.75)'); sh.addColorStop(1, 'rgba(7,7,11,0)'); g.fillStyle = sh; g.fillRect(0, 0, W, H);
+    worldBase = g.getImageData(0, 0, W, H);
+    motes = Array.from({ length: Math.round(W / 4) }, () => ({ x: Math.random() * W, y: Math.random() * H, v: 2 + Math.random() * 6, c: Math.random() < 0.7 ? '170,130,255' : Math.random() < 0.5 ? '110,210,255' : '243,223,166' }));
+  }
+  let worldBase = null;
+  function animateWorld(now) {
+    if (worldBase) {
+      g.putImageData(worldBase, 0, 0);
+      const t = now / 1000;
+      for (const m of motes) {
+        if (!reduce) { m.y -= m.v / 60; m.x += Math.sin((m.y + m.v * 10) / 8) * 0.03; }
+        if (m.y < 0) { m.y = cv.height; m.x = Math.random() * cv.width; }
+        g.fillStyle = `rgba(${m.c},${0.35 + 0.35 * Math.sin(t * 3 + m.x)})`; g.fillRect(Math.round(m.x), Math.round(m.y), 1, 1);
+      }
+    }
+    if (!reduce) requestAnimationFrame(animateWorld);
+  }
+
+  // ---------- menu + panels ----------
+  const menu = document.getElementById('menu'), panel = document.getElementById('panel'), toastEl = document.getElementById('toast');
+  const toast = (msg) => { toastEl.textContent = msg; toastEl.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { toastEl.hidden = true; }, 2600); };
+  function rb(label, rune, onClick, hint) {
+    const wrap = document.createElement('div'); wrap.className = 'rb-wrap';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'rb';
+    b.append(runeCanvas(rune));
+    const s = document.createElement('span'); s.textContent = label.toUpperCase();
+    if (hint) { const h = document.createElement('small'); h.textContent = hint; s.append(h); }
+    b.append(s); b.onclick = onClick;
+    b.addEventListener('pointerenter', () => { hovered = b; }); b.addEventListener('pointerleave', () => { if (hovered === b) hovered = null; });
+    b.addEventListener('focus', () => { hovered = b; }); b.addEventListener('blur', () => { if (hovered === b) hovered = null; });
+    wrap.append(b); return wrap;
+  }
+  function closePanel() { panel.hidden = true; spin = 0; menu.hidden = false; }
+  function openPanel(build) { panel.innerHTML = ''; build(panel); panel.hidden = false; }
+  function renderMenu() {
+    const T = L[lang];
+    [...menu.querySelectorAll('.rb-wrap')].forEach((x) => x.remove());
+    menu.append(
+      rb(T.enter, 0, () => { cast = 0.9; toast(T.connecting); }, 'play.spellandiron.net'),
+      rb(T.character, 1, () => openPanel((p) => { p.innerHTML = `<h2>${T.charTitle.toUpperCase()}</h2><p><b style="font:10px var(--mc)">Ardent_Vex</b></p><p>${T.charText}</p><p style="font:8px var(--mc)">${T.drag}</p>`; p.style.left = '30%'; p.style.width = 'min(420px, 55%)'; p.append(rb(T.back, 4, closePanel)); p.lastChild.classList.add('back'); })),
+      rb(T.settings, 2, () => openPanel(renderSettings)),
+      rb(T.news, 3, () => openPanel((p) => { p.style.left = '50%'; p.style.width = ''; p.innerHTML = `<h2>${T.newsTitle.toUpperCase()}</h2>${T.newsItems.map(([m, h, b]) => `<div class="news-i"><em>${m}</em><b>${h}</b><p>${b}</p></div>`).join('')}`; p.append(rb(T.back, 4, closePanel)); p.lastChild.classList.add('back'); })),
+      rb(T.quit, 4, () => toast(T.quitMsg)),
+    );
+    document.getElementById('footer').textContent = T.footer;
+    document.getElementById('langs').innerHTML = ['ru', 'uk', 'en'].map((l) => `<button type="button" data-l="${l}" class="${l === lang ? 'on' : ''}">${l === 'uk' ? 'UA' : l.toUpperCase()}${l === 'en' ? ' β' : ''}</button>`).join('');
+    document.querySelectorAll('[data-l]').forEach((b) => { b.onclick = () => { lang = b.dataset.l; document.documentElement.lang = lang; renderMenu(); if (!panel.hidden) closePanel(); }; });
+  }
+  function renderSettings(p) {
+    const T = L[lang];
+    p.style.left = '50%'; p.style.width = '';
+    p.innerHTML = `<h2>${T.setTitle.toUpperCase()}</h2><h3>${T.gfx}</h3><div class="grid4" id="pg"></div><h3>${T.lang}</h3><div class="grid3" id="lg"></div><p style="margin-top:14px">${T.setHint}</p>`;
+    T.presets.forEach((name, i) => { const w = rb(name, i, () => { preset = i; renderSettings(p); }); if (i === preset) w.firstChild.classList.add('sel'); p.querySelector('#pg').append(w); });
+    [['ru', 'Русский'], ['uk', 'Українська'], ['en', 'English β']].forEach(([l, n]) => { const w = rb(n, 3, () => { lang = l; renderMenu(); renderSettings(p); }); if (l === lang) w.firstChild.classList.add('sel'); p.querySelector('#lg').append(w); });
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap;margin-top:8px';
+    const back = rb(T.back, 4, closePanel); back.classList.add('back'); const van = rb(T.vanilla, 2, () => toast(T.vanilla)); van.classList.add('back'); van.style.width = '240px';
+    row.append(back, van); p.append(row);
+  }
+  // drag to rotate while the character panel is open
+  let drag = null;
+  addEventListener('pointerdown', (e) => { if (!panel.hidden && !panel.contains(e.target)) drag = e.clientX; });
+  addEventListener('pointermove', (e) => { if (drag !== null) { spin += (e.clientX - drag) * 0.8; drag = e.clientX; } });
+  addEventListener('pointerup', () => { drag = null; });
+
+  addEventListener('resize', fit);
+  renderMenu(); fit();
+  requestAnimationFrame(frame); requestAnimationFrame(animateWorld);
+})();
+</script>
+</body>
+</html>
