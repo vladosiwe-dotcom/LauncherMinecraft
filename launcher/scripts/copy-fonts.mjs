@@ -1,9 +1,11 @@
 // Copies the bundled web fonts into renderer/fonts so the launcher works offline.
 import { cpSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 const require = createRequire(import.meta.url);
-const out = new URL('../renderer/fonts/', import.meta.url).pathname;
+// fileURLToPath, not URL.pathname: on Windows pathname gives "/D:/..." and the build fails
+const out = fileURLToPath(new URL('../renderer/fonts/', import.meta.url));
 mkdirSync(out, { recursive: true });
 const faces = [
   ['@fontsource/cormorant-sc', 'Cormorant SC', [600, 700]],
