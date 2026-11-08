@@ -177,10 +177,14 @@ jobs:
           python3 - <<'PY'
           import base64, glob, io
           from PIL import Image
+          from PIL import ImageOps
+          ramp = " .:-=+*#%@"
           for p in sorted(glob.glob('rift/client-mod/run/screenshots/awakening-*.png')):
-              im = Image.open(p).convert('RGB'); im.thumbnail((480, 270))
-              b = io.BytesIO(); im.save(b, 'JPEG', quality=62)
-              print('FRAME', p.rsplit('/', 1)[-1], base64.b64encode(b.getvalue()).decode())
+              im = Image.open(p).convert('RGB')
+              print('FRAME', p.rsplit('/', 1)[-1], im.size, 'mean RGB', tuple(int(v) for v in im.resize((1, 1)).getpixel((0, 0))))
+              g = ImageOps.autocontrast(im.convert('L')).resize((110, 40))
+              for y in range(40):
+                  print('|' + ''.join(ramp[min(9, g.getpixel((x, y)) * 10 // 256)] for x in range(110)) + '|')
           PY
       - name: Stop the server
         if: always()
