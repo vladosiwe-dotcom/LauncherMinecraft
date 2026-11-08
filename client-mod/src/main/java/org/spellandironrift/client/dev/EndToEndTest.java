@@ -63,7 +63,7 @@ public final class EndToEndTest {
                 else if (scene.phase == RiftScene.Phase.BACK || scene.phase == RiftScene.Phase.MENU && t > 3000) fail("connection failed: " + (scene.backReason != null ? scene.backReason.getString() : "?"));
             }
             case 5 -> { if (t > 350) { shot("4-arrival"); next("arrival light"); } }
-            case 6 -> { if (t > 9000) { shot("5-world"); openSystemWindow(mc); next("opened the System window"); } }
+            case 6 -> { if (t > 13000) { shot("5-world"); openSystemWindow(mc); next("opened the System window"); } }
             case 7 -> { if (t > 2500) { shot("6-system"); mc.setScreen(null); next("closed the System window"); } }
             case 8 -> {
                 if (t > 1500) {
