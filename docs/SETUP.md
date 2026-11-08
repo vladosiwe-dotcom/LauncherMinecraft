@@ -10,7 +10,7 @@
 
 ```bash
 cd server
-./install.sh /opt/rift/server/runtime 21.1.172   # подставьте актуальную 21.1.x
+./install.sh /opt/rift/server/runtime 21.1.228   # подставьте актуальную 21.1.x
 ```
 
 Скрипт проверяет Java 21, скачивает установщик NeoForge, сверяет контрольную сумму и ставит сервер. Затем копирует наши `server.properties` и `user_jvm_args.txt` (существующие файлы не перезаписываются) и спрашивает согласие с EULA.

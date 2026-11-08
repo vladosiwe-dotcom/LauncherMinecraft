@@ -96,11 +96,11 @@ jobs:
         working-directory: solo
         run: ./gradlew build --no-daemon -q && ls -l build/libs
       - name: Fetch Create and other mods from Modrinth
-        run: python3 rift/tools/e2e/fetch_mods.py mods-server mods-client "$GITHUB_STEP_SUMMARY" required:create optional:sable optional:irons-spells-n-spellbooks optional:epic-fight
+        run: python3 rift/tools/e2e/fetch_mods.py mods-server mods-client "$GITHUB_STEP_SUMMARY" required:create optional:sable optional:epic-fight optional:irons-spells-n-spellbooks+irons-lib+curios+geckolib+playeranimator
       - name: Install a NeoForge 1.21.1 server
         run: |
           mkdir -p server/mods
-          curl -sSfL -o installer.jar https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.172/neoforge-21.1.172-installer.jar
+          curl -sSfL -o installer.jar https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.228/neoforge-21.1.228-installer.jar
           (cd server && java -jar ../installer.jar --installServer . > install.log 2>&1)
           echo "eula=true" > server/eula.txt
           cp rift/tools/e2e/server.properties server/server.properties

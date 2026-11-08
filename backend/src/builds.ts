@@ -99,7 +99,7 @@ export class Builds {
     const next = base ? bumpPatch(base.version) : '0.1.0';
     const b: Build = {
       id: `b-${Date.now().toString(36)}-${randomUUID().slice(0, 4)}`, version: next, status: 'draft',
-      neoforgeVersion: base?.neoforgeVersion ?? '21.1.172', entries: structuredClone(base?.entries ?? []), resourcePacks: [...(base?.resourcePacks ?? [])],
+      neoforgeVersion: base?.neoforgeVersion ?? '21.1.228', entries: structuredClone(base?.entries ?? []), resourcePacks: [...(base?.resourcePacks ?? [])],
       changelog: { ru: '', uk: '', en: '' }, createdAt: now, createdBy: user, updatedAt: now, basedOn: base?.id,
     };
     await this.db.builds.update((d) => { d.builds.push(b); });

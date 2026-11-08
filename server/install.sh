@@ -4,7 +4,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 TARGET="${1:-$HERE/runtime}"
-NEO="${2:-21.1.172}"
+NEO="${2:-21.1.228}"
 MAVEN="https://maven.neoforged.net/releases/net/neoforged/neoforge"
 
 [[ "$NEO" =~ ^21\.1\.[0-9]+(-beta)?$ ]] || { echo "Only NeoForge 21.1.x (Minecraft 1.21.1) is supported, got $NEO" >&2; exit 1; }
