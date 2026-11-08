@@ -47,10 +47,10 @@ jobs:
         include:
           - os: windows-latest
             target: --win
-            files: launcher/release/*.exe
+            files: launcher/.stage/release/*.exe
           - os: ubuntu-latest
             target: --linux
-            files: launcher/release/*.AppImage
+            files: launcher/.stage/release/*.AppImage
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     steps:
@@ -61,8 +61,10 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - name: Stage the launcher outside the workspace
+        run: node launcher/scripts/stage.mjs
       - name: Package the launcher
-        working-directory: launcher
+        working-directory: launcher/.stage
         run: npx electron-builder ${{ matrix.target }} --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
