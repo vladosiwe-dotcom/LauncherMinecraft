@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Rift Main Menu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+SC:wght@600;700&family=Rubik:wght@400;500&display=swap">
+<style>
+/* Layout: one 16:9 game screen in Minecraft GUI units (W×360), scaled to the window.
+   The Rift is the centre of the composition and shows the server state; the character stands at its foot,
+   the main action sits under the character's feet, everything else is quiet and pushed to the corners. */
+:root {
+  color-scheme: dark;
+  --ink: #07070b; --plate: #15131c; --plate-hi: #221f2d;
+  --iron: #4a4757; --iron-lo: #23212c;
+  --gold-hi: #f3dfa6; --gold: #c9a35b; --gold-lo: #7d5e2b;
+  --violet: #9a6bff; --arcane: #5fc8ff;
+  --text: #ebe6f3; --dim: #a49db4; --faint: #6e6880;
+  --ok: #62d68f; --bad: #ff6070; --warn: #f0b64c;
+  --display: 'Cormorant SC', 'Cormorant', Georgia, 'Times New Roman', serif;
+  --body: 'Rubik', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  --chamfer: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { overflow: hidden; background: var(--ink); color: var(--text); font-family: var(--body); user-select: none; -webkit-user-select: none; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#world { image-rendering: pixelated; }
+.vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 60% 70% at 50% 45%, transparent 40%, rgba(5,4,9,.72) 100%), linear-gradient(180deg, rgba(5,4,9,.55) 0%, transparent 22%, transparent 70%, rgba(5,4,9,.8) 100%); }
+#stage { position: absolute; left: 0; top: 0; height: 360px; transform-origin: 0 0; }
+
+/* entrance: each group appears from a visible resting state */
+.ui { transition: opacity .5s ease, transform .5s ease; }
+.boot .ui { opacity: 0; transform: translateY(4px); }
+.leaving .ui, .connecting .ui { opacity: 0; pointer-events: none; transform: none; transition-duration: .35s; }
+
+/* ---------- logo ---------- */
+.logo { position: absolute; left: 24px; top: 20px; display: flex; align-items: center; gap: 9px; }
+.logo svg { width: 42px; height: 42px; filter: drop-shadow(0 0 6px rgba(154,107,255,.45)); }
+.logo-words { display: flex; flex-direction: column; line-height: .9; }
+.logo-top { font: 600 9.5px var(--display); letter-spacing: .16em; color: var(--gold); text-transform: uppercase; }
+.logo-top i { font-style: normal; color: var(--violet); }
+.logo-main { font: 700 36px var(--display); letter-spacing: .1em; text-transform: uppercase;
+  background: linear-gradient(180deg, #fbf3dc 0%, #d9be82 38%, #8d6a31 62%, #e8d39e 100%); -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 1px 0 #241a0b) drop-shadow(0 0 8px rgba(154,107,255,.35)); }
+
+/* ---------- forged plate (server card, news) ---------- */
+.plate { position: absolute; clip-path: var(--chamfer); background: linear-gradient(180deg, rgba(31,28,41,.86), rgba(13,12,18,.9)); }
+.plate::before { content: ''; position: absolute; inset: 0; clip-path: var(--chamfer); padding: 1px; pointer-events: none;
+  background: linear-gradient(160deg, var(--gold) 0%, var(--iron) 30%, var(--iron-lo) 60%, var(--gold-lo) 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.eyebrow { font: 700 7.5px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--gold); }
+
+.server { right: 24px; top: 24px; width: 152px; padding: 8px 10px 9px; display: flex; flex-direction: column; gap: 5px; }
+.server-head { display: flex; justify-content: space-between; align-items: center; }
+.pill { font: 500 6px var(--body); letter-spacing: .04em; padding: 1px 5px 1px 10px; position: relative; color: var(--dim); background: rgba(255,255,255,.05); }
+.pill::before { content: ''; position: absolute; left: 4px; top: 50%; width: 3px; height: 3px; margin-top: -1.5px; background: var(--faint); }
+.pill.ok { color: var(--ok); } .pill.ok::before { background: var(--ok); box-shadow: 0 0 4px var(--ok); }
+.pill.bad { color: var(--bad); } .pill.bad::before { background: var(--bad); }
+.pill.warn { color: var(--warn); } .pill.warn::before { background: var(--warn); animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: .2; } }
+.count { display: flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; }
+.count b { font: 700 19px/1 var(--display); color: var(--text); }
+.count small { font: 400 6.5px var(--body); color: var(--dim); }
+.meter { height: 2px; background: rgba(255,255,255,.07); }
+.meter i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--violet), var(--arcane)); box-shadow: 0 0 4px rgba(95,200,255,.6); transition: width .8s ease; }
+.server-meta { display: flex; justify-content: space-between; font: 400 6px var(--body); color: var(--faint); font-variant-numeric: tabular-nums; }
+.ping { display: inline-flex; align-items: flex-end; gap: 1px; margin-right: 3px; height: 5px; vertical-align: -0.5px; }
+.ping i { width: 1.5px; background: var(--faint); }
+.ping i:nth-child(1) { height: 2px; } .ping i:nth-child(2) { height: 3px; } .ping i:nth-child(3) { height: 4px; } .ping i:nth-child(4) { height: 5px; }
+.ping.good i { background: var(--ok); }
+.motd { font: 400 6px/1.35 var(--body); color: var(--dim); border-top: 1px solid rgba(125,94,43,.35); padding-top: 5px; }
+
+.news { left: 24px; bottom: 24px; width: 150px; padding: 7px 10px 8px; display: flex; flex-direction: column; gap: 3px; text-align: left; border: 0; color: inherit; cursor: pointer; }
+.news b { font: 700 10px/1.1 var(--display); color: var(--text); letter-spacing: .02em; }
+.news span:last-child { font: 400 6px/1.35 var(--body); color: var(--dim); }
+.news:hover b, .news:focus-visible b { color: var(--gold-hi); }
+.news:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
+.narrow .news { display: none; }
+
+/* ---------- main action ---------- */
+.enter { position: absolute; left: 50%; top: 300px; width: 214px; height: 31px; margin-left: -107px; border: 0; padding: 0; cursor: pointer; color: var(--gold-hi);
+  clip-path: var(--chamfer); background: linear-gradient(90deg, var(--gold-lo), var(--gold) 50%, var(--gold-lo)); }
+.enter::before { content: ''; position: absolute; inset: 1px; clip-path: var(--chamfer);
+  background: radial-gradient(ellipse 70% 120% at 50% 100%, rgba(154,107,255,.38), transparent 70%), linear-gradient(180deg, rgba(36,28,58,.97), rgba(12,10,18,.97)); transition: background .25s; }
+.enter::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 40%; background: linear-gradient(100deg, transparent, rgba(243,223,166,.16), transparent); transform: translateX(-120%); }
+.enter:hover::after, .enter:focus-visible::after { animation: sweep 1.1s ease; }
+@keyframes sweep { to { transform: translateX(320%); } }
+.enter > span { position: relative; display: block; }
+.enter-label { font: 700 13px/1 var(--display); letter-spacing: .16em; text-transform: uppercase; text-shadow: 0 0 8px rgba(154,107,255,.6); }
+.enter-sub { margin-top: 3px; font: 400 5.5px var(--body); letter-spacing: .06em; color: var(--dim); font-variant-numeric: tabular-nums; }
+.enter:hover::before, .enter:focus-visible::before { background: radial-gradient(ellipse 80% 140% at 50% 100%, rgba(154,107,255,.6), transparent 70%), linear-gradient(180deg, rgba(48,34,82,.97), rgba(14,11,22,.97)); }
+.enter:focus-visible { outline: none; }
+.enter .gem { position: absolute; top: 50%; width: 5px; height: 5px; margin-top: -2.5px; background: var(--gold); transform: rotate(45deg); box-shadow: 0 0 4px var(--violet); }
+.enter .gem.l { left: 10px; } .enter .gem.r { right: 10px; }
+.sealed .enter { background: linear-gradient(90deg, var(--iron-lo), var(--iron) 50%, var(--iron-lo)); color: var(--dim); }
+.sealed .enter::before { background: linear-gradient(180deg, rgba(28,26,36,.97), rgba(12,11,16,.97)); }
+.sealed .enter-label { text-shadow: none; }
+.sealed .enter .gem { background: var(--iron); box-shadow: none; }
+
+/* ---------- secondary row ---------- */
+.row { position: absolute; left: 0; right: 0; top: 339px; display: flex; justify-content: center; align-items: center; gap: 6px; }
+.row button { border: 0; background: none; padding: 1px 3px; cursor: pointer; color: var(--dim); font: 500 6.5px var(--body); letter-spacing: .16em; text-transform: uppercase; position: relative; }
+.row button::after { content: ''; position: absolute; left: 3px; right: 3px; bottom: -1px; height: 1px; background: var(--gold); transform: scaleX(0); transition: transform .2s; }
+.row button:hover, .row button:focus-visible { color: var(--gold-hi); outline: none; }
+.row button:hover::after, .row button:focus-visible::after { transform: scaleX(1); }
+.row i { width: 2.5px; height: 2.5px; background: var(--gold-lo); transform: rotate(45deg); }
+
+.footer { position: absolute; right: 24px; bottom: 10px; font: 400 5.5px var(--body); color: var(--faint); letter-spacing: .04em; }
+
+/* ---------- character at the foot of the rift ---------- */
+.rim { position: absolute; left: 50%; top: 280px; width: 0; height: 0;
+  filter: brightness(.6) drop-shadow(0 0 1px rgba(214,196,255,.95)) drop-shadow(0 0 5px rgba(154,107,255,.7)); transition: filter .8s; }
+.sealed .rim { filter: brightness(.72) drop-shadow(0 0 1px rgba(150,146,170,.5)); }
+.hero { position: absolute; left: 0; top: 0; perspective: 600px; }
+.char, .part, .face { position: absolute; transform-style: preserve-3d; }
+.face { background-repeat: no-repeat; image-rendering: pixelated; backface-visibility: hidden; }
+.face.inner { backface-visibility: visible; }
+.ring { position: absolute; border-radius: 50%; pointer-events: none; transition: opacity .8s; }
+.ring.a { left: -62px; top: -62px; width: 124px; height: 124px; border: 1.5px dotted rgba(95,200,255,.55); animation: spin 18s linear infinite; }
+.ring.b { left: -44px; top: -44px; width: 88px; height: 88px; border: 1.5px dashed rgba(201,163,91,.5); animation: spin 12s linear infinite reverse; }
+.sealed .ring { opacity: .25; }
+@keyframes spin { from { transform: rotateX(76deg) rotateZ(0); } to { transform: rotateX(76deg) rotateZ(360deg); } }
+
+/* ---------- connecting ---------- */
+.connect { position: absolute; left: 50%; top: 292px; width: 260px; margin-left: -130px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; pointer-events: none; transition: opacity .5s .2s; }
+.connecting .connect { opacity: 1; pointer-events: auto; }
+.connect b { font: 700 12px var(--display); letter-spacing: .12em; color: var(--gold-hi); text-transform: uppercase; }
+.connect span { font: 400 6px var(--body); color: var(--dim); }
+.connect button { margin-top: 5px; border: 0; padding: 4px 14px; cursor: pointer; clip-path: var(--chamfer); background: rgba(35,33,44,.9); color: var(--dim); font: 500 6px var(--body); letter-spacing: .16em; text-transform: uppercase; }
+.connect button:hover, .connect button:focus-visible { color: var(--gold-hi); background: rgba(60,44,100,.9); outline: none; }
+
+#flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 45%, #f6f1ff 0%, #b79bff 45%, #2a1660 100%); }
+
+/* ---------- mockup chrome (not part of the game screen) ---------- */
+.mock { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px;
+  font: 11px var(--mono); color: #b9b2c9; background: rgba(10,9,14,.82); border: 1px dashed #4a4757; z-index: 5; white-space: nowrap; }
+.mock button { font: 11px var(--mono); border: 0; padding: 3px 8px; background: transparent; color: #8c86a0; cursor: pointer; }
+.mock button[aria-pressed="true"] { background: #2b2440; color: var(--gold-hi); }
+.mock button:focus-visible { outline: 1px solid var(--gold); }
+.toast { position: absolute; left: 50%; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px 14px; font: 13px var(--body); color: var(--gold-hi); background: rgba(13,12,18,.94); border: 1px solid var(--gold-lo); z-index: 6; max-width: calc(100% - 32px); text-align: center; }
+.portrait-hint { display: none; position: absolute; left: 16px; right: 16px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); text-align: center; font: 12px var(--body); color: var(--faint); }
+@media (orientation: portrait) { .portrait-hint { display: block; } .mock span { display: none; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<canvas id="world" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<main id="stage" class="boot">
+  <div class="logo ui" aria-label="Spell and Iron Rift" style="transition-delay:.15s">
+    <svg viewBox="0 0 120 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="gg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3dfa6"/><stop offset=".45" stop-color="#c9a35b"/><stop offset="1" stop-color="#7d5e2b"/></linearGradient>
+        <linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#7ad7ff"/><stop offset=".5" stop-color="#9a6bff"/><stop offset="1" stop-color="#5b2fd1"/></linearGradient>
+      </defs>
+      <circle cx="60" cy="60" r="55" fill="none" stroke="url(#gg)" stroke-width="2.5"/>
+      <circle cx="60" cy="60" r="46" fill="none" stroke="#c9a35b" stroke-opacity=".45" stroke-width="1" stroke-dasharray="2 5"/>
+      <g stroke="#c9a35b" stroke-width="2" fill="none"><path d="M60 2v8M60 110v8M2 60h8M110 60h8M18 18l6 6M96 96l6 6M102 18l-6 6M18 102l6-6"/></g>
+      <path d="M60 20l30 17v46L60 100 30 83V37z" fill="#0e0d14" stroke="url(#gg)" stroke-width="3"/>
+      <path d="M38 41h44M38 79h44" stroke="#6f6a7d" stroke-width="2"/>
+      <path d="M63 28l-8 18 11 6-12 12 9 28" fill="none" stroke="url(#gr)" stroke-width="5" stroke-linejoin="bevel"/>
+      <path d="M63 28l-8 18 11 6-12 12 9 28" fill="none" stroke="#e9dcff" stroke-width="1.4" stroke-linejoin="bevel"/>
+    </svg>
+    <div class="logo-words"><span class="logo-top">Spell <i>&amp;</i> Iron</span><span class="logo-main">Rift</span></div>
+  </div>
+
+  <section class="plate server ui" aria-label="Состояние сервера" style="transition-delay:.3s">
+    <div class="server-head"><span class="eyebrow">Сервер</span><span class="pill warn" id="pill">Проверка</span></div>
+    <div class="count"><b id="online">—</b><small id="max">/ 100 игроков</small></div>
+    <div class="meter"><i id="meter"></i></div>
+    <div class="server-meta"><span>play.spellandiron.net</span><span><span class="ping" id="pingBars"><i></i><i></i><i></i><i></i></span><span id="ping">…</span></span></div>
+    <div class="motd" id="motd">Ночь Разлома — 9 ноября. Разломы открываются по всему миру.</div>
+  </section>
+
+  <div class="rim" id="rim">
+    <div class="ring a"></div><div class="ring b"></div>
+    <div class="hero" id="hero"><div class="char" id="char"></div></div>
+  </div>
+
+  <button class="enter ui" id="enter" type="button" style="transition-delay:.45s">
+    <i class="gem l"></i><i class="gem r"></i>
+    <span class="enter-label" id="enterLabel">Войти в Разлом</span>
+    <span class="enter-sub" id="enterSub">Проверяем сервер…</span>
+  </button>
+
+  <nav class="row ui" aria-label="Меню" style="transition-delay:.55s">
+    <button type="button" data-screen="Персонаж">Персонаж</button><i></i>
+    <button type="button" data-screen="Настройки">Настройки</button><i></i>
+    <button type="button" data-screen="Новости">Новости</button><i></i>
+    <button type="button" data-quit>Выход</button>
+  </nav>
+
+  <button class="plate news ui" type="button" data-screen="Новости" style="transition-delay:.65s">
+    <span class="eyebrow">Событие · 02.11</span>
+    <b>Ночь Разлома — 9 ноября</b>
+    <span>Редкие свитки и руны за закрытие разломов</span>
+  </button>
+
+  <div class="footer ui">Сборка 0.3.2 · NeoForge 1.21.1</div>
+
+  <div class="connect" aria-live="polite">
+    <b id="connStatus">Подключение к серверу</b>
+    <span id="connSub">play.spellandiron.net</span>
+    <button type="button" id="cancel">Отмена</button>
+  </div>
+</main>
+
+<div id="flash" aria-hidden="true"></div>
+<div class="mock" role="group" aria-label="Управление макетом"><span>макет · сервер:</span>
+  <button type="button" id="mOn" aria-pressed="true">онлайн</button>
+  <button type="button" id="mOff" aria-pressed="false">недоступен</button>
+</div>
+<div class="toast" id="toast" hidden></div>
+<div class="portrait-hint">Это экран игры 16:9. Поверните телефон, чтобы рассмотреть детали.</div>
+
+<script>
+(() => {
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), world = $('world'), fx = $('fx'), wg = world.getContext('2d'), g = fx.getContext('2d');
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
+  const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
+  const mix = (a, b, t) => a.map((v, i) => Math.round(lerp(v, b[i], t)));
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${clamp(a, 0, 1)})`;
+
+  // ---------- geometry: the screen is W×360 GUI units ----------
+  let W = 640, S = 1, OX = 0, OY = 0, dpr = 1;
+  const RIFT_TOP = 30, RIFT_BOT = 276, FEET = 280;
+  function layout() {
+    const vw = innerWidth, vh = innerHeight;
+    W = Math.round(clamp(360 * vw / vh, 480, 854));
+    S = Math.min(vw / W, vh / 360);
+    OX = (vw - W * S) / 2; OY = (vh - 360 * S) / 2;
+    stage.style.width = W + 'px';
+    stage.style.transform = `translate(${OX}px, ${OY}px) scale(${S})`;
+    stage.classList.toggle('narrow', W < 600);
+    dpr = Math.min(2, devicePixelRatio || 1);
+    fx.width = Math.round(vw * dpr); fx.height = Math.round(vh * dpr);
+    buildRift(); drawWorld();
+  }
+
+  // ---------- backdrop: stand-in for the Rift panorama (in game: a resource-pack panorama) ----------
+  function drawWorld() {
+    const P = 2 * S; // one world pixel = 2 GUI units
+    const w = world.width = Math.ceil(innerWidth / P), h = world.height = Math.ceil(innerHeight / P);
+    const ox = OX / P, oy = OY / P, X = (u) => ox + u / 2, Y = (u) => oy + u / 2;
+    let seed = 99; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const sky = wg.createLinearGradient(0, 0, 0, h);
+    sky.addColorStop(0, '#0a0716'); sky.addColorStop(clamp(Y(200) / h, 0, 1), '#22143e'); sky.addColorStop(clamp(Y(280) / h, 0, 1), '#120c22'); sky.addColorStop(1, '#050409');
+    wg.fillStyle = sky; wg.fillRect(0, 0, w, h);
+    for (let i = 0; i < w * h / 170; i++) { wg.fillStyle = `rgba(230,220,255,${rnd() * 0.55})`; wg.fillRect(Math.floor(rnd() * w), Math.floor(rnd() * Y(190)), 1, 1); }
+    // floating islands
+    for (const [fx_, fy, iw] of [[0.16, 104, 12], [0.84, 78, 15], [0.95, 160, 8], [0.31, 60, 6]]) {
+      const cx = Math.floor(X(W * fx_)), cy = Math.floor(Y(fy));
+      for (let r = 0; r < 6; r++) { const ww = Math.max(1, iw - r * 2); wg.fillStyle = r === 0 ? '#2b4027' : r === 1 ? '#3b2d24' : '#221a19'; wg.fillRect(cx - ww, cy + r, ww * 2, 1); }
+      wg.fillStyle = 'rgba(154,107,255,.55)'; wg.fillRect(cx, cy + 7, 1, 2);
+    }
+    // three silhouette layers: far mountains, ruins, ground
+    const layer = (base, col, minH, maxH, spire) => {
+      let x = -2;
+      while (x < w + 2) {
+        const bw = 2 + Math.floor(rnd() * 6), tall = spire && rnd() < 0.2;
+        const bh = Math.round(minH + rnd() * (maxH - minH) + (tall ? 18 + rnd() * 16 : 0));
+        const top = Math.floor(Y(base)) - bh;
+        wg.fillStyle = col; wg.fillRect(x, top, bw, h - top);
+        if (tall && rnd() < 0.7) { wg.fillStyle = 'rgba(154,107,255,.6)'; wg.fillRect(x + Math.floor(bw / 2), top + 3, 1, 2); }
+        x += bw;
+      }
+    };
+    layer(240, '#1b1331', 4, 22, false);
+    layer(266, '#110c1e', 2, 9, true);
+    wg.fillStyle = '#07060b'; wg.fillRect(0, Math.floor(Y(FEET)), w, h);
+    wg.fillStyle = 'rgba(154,107,255,.12)'; wg.fillRect(0, Math.floor(Y(FEET)), w, 1);
+    const fog = wg.createLinearGradient(0, Y(236), 0, Y(286));
+    fog.addColorStop(0, 'rgba(60,40,110,0)'); fog.addColorStop(0.7, 'rgba(60,40,110,.28)'); fog.addColorStop(1, 'rgba(60,40,110,0)');
+    wg.fillStyle = fog; wg.fillRect(0, Y(236), w, Y(286) - Y(236));
+  }
+
+  // ---------- the Rift ----------
+  let pts = [], stars = [], parts = [], arcs = [];
+  function buildRift() {
+    let seed = 11; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const N = 18, cx = W / 2; pts = [];
+    for (let i = 0; i <= N; i++) {
+      const t = i / N, side = i % 2 ? 1 : -1;
+      const amp = i === 0 || i === N ? 0 : (1.5 + rnd() * 3.5) * side * Math.pow(Math.sin(Math.PI * t), 0.5);
+      pts.push({ x: cx + amp, y: lerp(RIFT_TOP, RIFT_BOT, t), t, ph: rnd() * 6.28 });
+    }
+    stars = Array.from({ length: 46 }, () => ({ u: Math.random(), o: Math.random() * 2 - 1, z: 0.4 + Math.random(), a: 0.3 + Math.random() * 0.7 }));
+  }
+  // lens-shaped opening, widest above the character's head
+  const halfW = (t, open) => open * 15 * Math.pow(Math.sin(Math.PI * Math.pow(clamp(t, 0, 1), 0.66)), 1.1);
+  function centreAt(t) { const f = clamp(t, 0, 1) * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)); return lerp(pts[i].x, pts[i + 1].x, f - i); }
+
+  // state of the screen
+  const st = { server: 'checking', power: 0, pull: 0, enterT: -1, connecting: false, connT: 0, boost: 0, nextArc: 1.5, recheck: 10 };
+  const C_SEALED = { v: [92, 88, 112], a: [118, 114, 134], c: [170, 166, 184] }, C_OPEN = { v: [154, 107, 255], a: [95, 200, 255], c: [240, 236, 255] };
+
+  function drawRift(time, dt) {
+    const p = st.power, breath = reduce ? 1 : 0.92 + 0.08 * Math.sin(time * 1.6);
+    const I = (0.35 + 0.65 * p) * breath * (1 + 0.3 * st.pull) * (1 + st.boost);
+    const open = (0.3 + 0.7 * p) * breath * (1 + 0.25 * st.pull) * (1 + 1.1 * st.boost);
+    const cv = mix(C_SEALED.v, C_OPEN.v, p), ca = mix(C_SEALED.a, C_OPEN.a, p), cc = mix(C_SEALED.c, C_OPEN.c, p);
+    const cx = W / 2;
+    g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, fx.width, fx.height);
+    g.setTransform(dpr * S, 0, 0, dpr * S, dpr * OX, dpr * OY);
+    g.globalCompositeOperation = 'lighter';
+    // ambient light thrown on the scene and the pool at the base
+    let rg = g.createRadialGradient(cx, 150, 4, cx, 150, 230);
+    rg.addColorStop(0, rgba(cv, 0.22 * I)); rg.addColorStop(1, rgba(cv, 0));
+    g.fillStyle = rg; g.fillRect(cx - 240, -40, 480, 400);
+    g.save(); g.translate(cx, FEET); g.scale(1, 0.16);
+    rg = g.createRadialGradient(0, 0, 2, 0, 0, 110);
+    rg.addColorStop(0, rgba(ca, 0.5 * I)); rg.addColorStop(0.5, rgba(cv, 0.22 * I)); rg.addColorStop(1, rgba(cv, 0));
+    g.fillStyle = rg; g.beginPath(); g.arc(0, 0, 110, 0, Math.PI * 2); g.fill(); g.restore();
+
+    // edges
+    const L = [], R = [];
+    for (const q of pts) {
+      const hw = halfW(q.t, open), j = reduce ? 0 : Math.sin(time * 5 + q.ph) * 0.45 * open;
+      L.push([q.x - hw - j, q.y]); R.push([q.x + hw + j * 0.7, q.y]);
+    }
+    const poly = () => { g.beginPath(); g.moveTo(L[0][0], L[0][1]); for (const q of L) g.lineTo(q[0], q[1]); for (let i = R.length - 1; i >= 0; i--) g.lineTo(R[i][0], R[i][1]); g.closePath(); };
+    // the other side, seen through the tear
+    g.globalCompositeOperation = 'source-over';
+    poly();
+    const inside = g.createLinearGradient(0, RIFT_TOP, 0, RIFT_BOT);
+    inside.addColorStop(0, rgba(mix([20, 18, 26], [26, 12, 60], p), 1)); inside.addColorStop(0.5, rgba(mix([30, 28, 38], [44, 18, 96], p), 1)); inside.addColorStop(1, rgba(mix([16, 15, 20], [14, 8, 34], p), 1));
+    g.fillStyle = inside; g.fill();
+    g.save(); poly(); g.clip(); g.globalCompositeOperation = 'lighter';
+    for (const s of stars) {
+      const t = (s.u + (reduce ? 0 : time * 0.012 * s.z)) % 1, y = lerp(RIFT_TOP, RIFT_BOT, t), x = centreAt(t) + s.o * halfW(t, open) * 0.8;
+      g.fillStyle = rgba(cc, s.a * p * (0.6 + 0.4 * Math.sin(time * 3 + s.u * 40))); g.fillRect(x - 0.4, y - 0.4, 0.8, 0.8);
+    }
+    g.restore();
+    g.globalCompositeOperation = 'lighter';
+    const edge = (pts2, width, color) => { g.beginPath(); g.moveTo(pts2[0][0], pts2[0][1]); for (const q of pts2) g.lineTo(q[0], q[1]); g.lineWidth = width; g.strokeStyle = color; g.stroke(); };
+    g.lineJoin = 'bevel'; g.lineCap = 'round';
+    g.shadowColor = rgba(cv, 0.9 * I); g.shadowBlur = 26 * S * dpr;
+    poly(); g.fillStyle = rgba(cv, 0.1 * I); g.fill();
+    edge(L, 5, rgba(cv, 0.22 * I)); edge(R, 5, rgba(cv, 0.22 * I));
+    g.shadowBlur = 0;
+    edge(L, 2.2, rgba(ca, 0.5 * I)); edge(R, 2.2, rgba(ca, 0.5 * I));
+    edge(L, 0.8, rgba(cc, 0.95 * Math.min(1, I))); edge(R, 0.8, rgba(cc, 0.95 * Math.min(1, I)));
+
+    // short arcs of energy leaving the edge: only while the rift is open
+    st.nextArc -= dt;
+    if (!reduce && p > 0.7 && st.nextArc <= 0) {
+      st.nextArc = 1.6 + Math.random() * 3.2;
+      const i = 2 + Math.floor(Math.random() * (pts.length - 4)), side = Math.random() < 0.5 ? L : R, dir = side === L ? -1 : 1;
+      const a = [side[i].slice()]; let [x, y] = side[i];
+      for (let k = 0; k < 4; k++) { x += dir * (3 + Math.random() * 6); y += (Math.random() - 0.6) * 7; a.push([x, y]); }
+      arcs.push({ a, life: 0.14 });
+    }
+    arcs = arcs.filter((r) => (r.life -= dt) > 0);
+    for (const r of arcs) { edge(r.a, 0.7, rgba(cc, r.life / 0.14)); edge(r.a, 2, rgba(ca, 0.35 * r.life / 0.14)); }
+
+    // motes: thrown out when open, pulled in on hover, falling like ash when sealed
+    const rate = (reduce ? 6 : 26) * (0.15 + 0.85 * p) * (1 + st.pull + 2 * st.boost);
+    let n = rate * dt; while (n > 0) { if (Math.random() < n) spawn(p, L, R); n -= 1; }
+    parts = parts.filter((m) => (m.life += dt) < m.max);
+    for (const m of parts) {
+      if (m.pull) { const t = clamp((m.y - RIFT_TOP) / (RIFT_BOT - RIFT_TOP), 0, 1); const dx = centreAt(t) - m.x; m.vx += dx * 3 * dt; m.vy *= 0.98; if (Math.abs(dx) < 2) m.life = m.max; }
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      const a = Math.sin(Math.PI * m.life / m.max) * m.a;
+      g.fillStyle = rgba(m.c === 0 ? cv : m.c === 1 ? ca : [243, 223, 166], a); g.fillRect(m.x - m.s / 2, m.y - m.s / 2, m.s, m.s);
+    }
+    g.globalCompositeOperation = 'source-over';
+  }
+  function spawn(p, L, R) {
+    const c = Math.random() < 0.55 ? 0 : Math.random() < 0.75 ? 1 : 2, s = Math.random() < 0.8 ? 1.2 : 2;
+    if (st.pull > 0.5 && p > 0.5) { // drawn in toward the tear
+      const ang = Math.random() * Math.PI * 2, r = 40 + Math.random() * 120;
+      parts.push({ x: W / 2 + Math.cos(ang) * r, y: clamp(150 + Math.sin(ang) * r * 0.7, RIFT_TOP, RIFT_BOT), vx: 0, vy: 0, pull: true, life: 0, max: 1.6 + Math.random(), c, s, a: 0.9 });
+    } else if (p < 0.4) { // sealed: slow grey ash
+      parts.push({ x: W / 2 + (Math.random() - 0.5) * 60, y: RIFT_TOP + Math.random() * 100, vx: (Math.random() - 0.5) * 3, vy: 4 + Math.random() * 5, life: 0, max: 3 + Math.random() * 2, c: 0, s: 1, a: 0.5 });
+    } else {
+      const i = 1 + Math.floor(Math.random() * (pts.length - 2)), left = Math.random() < 0.5, e = left ? L[i] : R[i];
+      parts.push({ x: e[0], y: e[1], vx: (left ? -1 : 1) * (5 + Math.random() * 16), vy: -(3 + Math.random() * 12), life: 0, max: 2 + Math.random() * 2.4, c, s, a: 0.85 });
+    }
+  }
+
+  // ---------- character: same rig as the mod's PlayerModelRenderer; in game it wears the player's own skin ----------
+  const skin = document.createElement('canvas'); skin.width = 64; skin.height = 64;
+  (() => {
+    const c = skin.getContext('2d'); let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const shade = (hex, amt) => { const n = parseInt(hex.slice(1), 16); const f = (v) => clamp(v + amt, 0, 255); return `rgb(${f(n >> 16)},${f((n >> 8) & 255)},${f(n & 255)})`; };
+    const fill = (x, y, w, h, hex, noise = 10) => { for (let i = 0; i < w; i++) for (let j = 0; j < h; j++) { c.fillStyle = shade(hex, Math.round((rnd() - 0.5) * noise * 2)); c.fillRect(x + i, y + j, 1, 1); } };
+    const px = (x, y, col) => { c.fillStyle = col; c.fillRect(x, y, 1, 1); };
+    const box = (u, v, w, h, d, col) => { fill(u + d, v, w, d, col.top); fill(u + d + w, v, w, d, col.bottom); fill(u, v + d, d, h, col.side); fill(u + d, v + d, w, h, col.front); fill(u + d + w, v + d, d, h, col.side); fill(u + d + w + d, v + d, w, h, col.back); };
+    const robe = '#2a2238', robeDk = '#1b1626', gold = '#c9a35b', sk = '#c69276';
+    box(0, 0, 8, 8, 8, { top: '#3a2a52', bottom: sk, side: '#33264a', front: sk, back: '#33264a' });
+    fill(8, 8, 8, 2, '#3a2a52'); fill(8, 10, 1, 4, '#33264a'); fill(15, 10, 1, 4, '#33264a');
+    px(10, 12, '#e9f6ff'); px(11, 12, '#5fc8ff'); px(13, 12, '#5fc8ff'); px(14, 12, '#e9f6ff');
+    fill(11, 14, 3, 1, '#8a5a48', 4); fill(9, 15, 6, 1, '#6b4636', 4);
+    box(32, 0, 8, 8, 8, { top: '#2d2142', bottom: '#2d2142', side: '#2d2142', front: '#2d2142', back: '#2d2142' });
+    c.clearRect(41, 10, 6, 6); c.clearRect(48, 8, 8, 8); c.clearRect(48, 0, 8, 8); fill(40, 8, 8, 2, '#2d2142'); px(40, 10, '#2d2142'); px(47, 10, '#2d2142'); fill(40, 9, 8, 1, gold, 6);
+    box(16, 16, 8, 12, 4, { top: robe, bottom: robeDk, side: robeDk, front: robe, back: robeDk });
+    fill(23, 20, 2, 12, gold, 8); fill(20, 27, 8, 1, '#5b37c9', 6); px(24, 27, '#9a6bff'); fill(20, 20, 8, 1, gold, 6);
+    const arm = (u, v) => { box(u, v, 4, 12, 4, { top: robe, bottom: sk, side: robe, front: robe, back: robeDk }); fill(u + 4, v + 12, 4, 1, gold, 6); for (const ox of [0, 4, 8, 12]) fill(u + ox, v + 13, 4, 3, sk); };
+    arm(40, 16); arm(32, 48);
+    const leg = (u, v) => { box(u, v, 4, 12, 4, { top: robeDk, bottom: '#4a4757', side: '#1e1a29', front: '#211c2e', back: '#1e1a29' }); for (const ox of [0, 4, 8, 12]) fill(u + ox, v + 13, 4, 3, '#55525f', 12); };
+    leg(0, 16); leg(16, 48);
+  })();
+  const SKIN = skin.toDataURL(), K = 4;
+  function face(w, h, u, v, transform, inner) {
+    const f = document.createElement('div'); f.className = 'face' + (inner ? ' inner' : '');
+    Object.assign(f.style, { width: w * K + 'px', height: h * K + 'px', left: -w * K / 2 + 'px', top: -h * K / 2 + 'px', backgroundImage: `url(${SKIN})`, backgroundSize: `${64 * K}px ${64 * K}px`, backgroundPosition: `${-u * K}px ${-v * K}px`, transform });
+    return f;
+  }
+  function cuboid(u, v, w, h, d, grow = 1, inner = false) {
+    const p = document.createElement('div'); p.className = 'part';
+    const Wd = w * K * grow / 2 / grow, H = h * K * grow / 2 / grow, D = d * K * grow / 2 / grow, s = grow;
+    p.append(face(w, h, u + d, v + d, `scale(${s}) translateZ(${D}px)`, inner), face(w, h, u + d + w + d, v + d, `scale(${s}) rotateY(180deg) translateZ(${D}px)`, inner),
+      face(d, h, u, v + d, `scale(${s}) rotateY(-90deg) translateZ(${Wd}px)`, inner), face(d, h, u + d + w, v + d, `scale(${s}) rotateY(90deg) translateZ(${Wd}px)`, inner),
+      face(w, d, u + d, v, `scale(${s}) rotateX(90deg) translateZ(${H}px)`, inner), face(w, d, u + d + w, v, `scale(${s}) rotateX(-90deg) translateZ(${H}px)`, inner));
+    return p;
+  }
+  function joint(x, y, child, cy) { const j = document.createElement('div'); j.className = 'part'; j.style.transform = `translate3d(${x * K}px, ${y * K}px, 0)`; child.style.transform = `translate3d(0, ${cy * K}px, 0)`; j.append(child); return j; }
+  const root = $('char'), body = document.createElement('div'); body.className = 'part';
+  const torso = cuboid(16, 16, 8, 12, 4); torso.style.transform = `translate3d(0, ${-18 * K}px, 0)`;
+  const headPivot = document.createElement('div'); headPivot.className = 'part'; headPivot.style.transform = `translate3d(0, ${-24 * K}px, 0)`;
+  const headInner = document.createElement('div'); headInner.className = 'part';
+  const head = cuboid(0, 0, 8, 8, 8); head.style.transform = `translate3d(0, ${-4 * K}px, 0)`;
+  const hood = cuboid(32, 0, 8, 8, 8, 1.125, true); hood.style.transform = `translate3d(0, ${-4 * K}px, 0)`;
+  headInner.append(head, hood); headPivot.append(headInner);
+  const rArm = joint(-6, -22, cuboid(40, 16, 4, 12, 4), 4), lArm = joint(6, -22, cuboid(32, 48, 4, 12, 4), 4);
+  const rLeg = joint(-2, -12, cuboid(0, 16, 4, 12, 4), 6), lLeg = joint(2, -12, cuboid(16, 48, 4, 12, 4), 6);
+  body.append(torso, headPivot, rArm, lArm); root.append(rLeg, lLeg, body);
+
+  let mx = innerWidth / 2, my = innerHeight / 2, hovered = null;
+  let yaw = 0, pitch = 0, bodyYaw = 0;
+  addEventListener('pointermove', (e) => { mx = e.clientX; my = e.clientY; });
+  function animateHero(time, dt) {
+    const headX = OX + (W / 2) * S, headY = OY + (FEET - 27 * K) * S;
+    let tx = mx, ty = my;
+    if (hovered) { const b = hovered.getBoundingClientRect(); tx = b.left + b.width / 2; ty = b.top + b.height / 2; }
+    const span = 64 * S;
+    const k = Math.min(1, dt * 6);
+    yaw += (clamp(Math.atan((tx - headX) / span) * 57 * 1.1, -55, 55) - yaw) * k;
+    pitch += (clamp(Math.atan((ty - headY) / span) * 57 * 0.8, -35, 40) - pitch) * k;
+    bodyYaw += (clamp(yaw * 0.35, -25, 25) - bodyYaw) * k * 0.6;
+    // entering: turn to the rift, walk into it
+    let spin = 0, walk = 0;
+    if (st.enterT >= 0) { spin = 180 * ease(st.enterT / 0.32); walk = ease((st.enterT - 0.28) / 0.6); }
+    const breathe = reduce ? 0 : Math.sin(time * 2.1) * 0.012, sway = reduce ? 0 : Math.sin(time * 1.35);
+    root.style.transform = `rotateY(${(spin ? 0 : bodyYaw) + spin}deg) scaleY(${1 + breathe})`;
+    headInner.style.transform = spin ? 'none' : `rotateY(${yaw - bodyYaw}deg) rotateX(${-pitch}deg)`;
+    const step = walk > 0 && walk < 1 ? Math.sin(time * 14) * 28 : 0;
+    rArm.style.transform = `translate3d(${-6 * K}px, ${-22 * K}px, 0) rotateX(${sway * 2.9 - step}deg) rotateZ(${-(3.4 + Math.cos(time * 1.1) * 2)}deg)`;
+    lArm.style.transform = `translate3d(${6 * K}px, ${-22 * K}px, 0) rotateX(${-sway * 2.9 + step}deg) rotateZ(${3.4 + Math.cos(time * 1.1) * 2}deg)`;
+    rLeg.style.transform = `translate3d(${-2 * K}px, ${-12 * K}px, 0) rotateX(${step}deg)`;
+    lLeg.style.transform = `translate3d(${2 * K}px, ${-12 * K}px, 0) rotateX(${-step}deg)`;
+    const hero = $('hero');
+    hero.style.transform = `translateY(${-walk * 10}px) scale(${1 - 0.5 * walk})`;
+    hero.style.opacity = st.connecting ? 0 : 1 - walk;
+  }
+
+  // ---------- server state ----------
+  function setServer(s) {
+    st.server = s;
+    const on = s === 'online', off = s === 'offline';
+    stage.classList.toggle('sealed', off);
+    $('pill').className = 'pill ' + (on ? 'ok' : off ? 'bad' : 'warn');
+    $('pill').textContent = on ? 'Онлайн' : off ? 'Недоступен' : 'Проверка';
+    $('online').textContent = on ? '37' : '—';
+    $('meter').style.width = on ? '37%' : '0';
+    $('ping').textContent = on ? '42 мс' : off ? 'нет ответа' : '…';
+    $('pingBars').classList.toggle('good', on);
+    $('motd').textContent = off ? 'Сервер не отвечает. Возможно, идут технические работы.' : 'Ночь Разлома — 9 ноября. Разломы открываются по всему миру.';
+    $('enterLabel').textContent = off ? 'Сервер недоступен' : 'Войти в Разлом';
+    $('enterSub').textContent = on ? 'play.spellandiron.net · 42 мс' : off ? `Повторная проверка через ${Math.ceil(st.recheck)} с · нажмите, чтобы проверить сейчас` : 'Проверяем сервер…';
+  }
+  let demoOffline = false;
+  function check() { setServer('checking'); setTimeout(() => { st.recheck = 10; setServer(demoOffline ? 'offline' : 'online'); }, 1100); }
+  $('mOn').onclick = () => { demoOffline = false; $('mOn').setAttribute('aria-pressed', 'true'); $('mOff').setAttribute('aria-pressed', 'false'); if (!st.connecting && st.enterT < 0) check(); };
+  $('mOff').onclick = () => { demoOffline = true; $('mOff').setAttribute('aria-pressed', 'true'); $('mOn').setAttribute('aria-pressed', 'false'); if (!st.connecting && st.enterT < 0) setServer('offline'); };
+
+  // ---------- actions ----------
+  const enter = $('enter');
+  enter.addEventListener('pointerenter', () => { hovered = enter; });
+  enter.addEventListener('pointerleave', () => { hovered = null; });
+  enter.addEventListener('focus', () => { hovered = enter; });
+  enter.addEventListener('blur', () => { hovered = null; });
+  enter.onclick = () => {
+    if (st.enterT >= 0 || st.connecting) return;
+    if (st.server === 'offline') { check(); return; }
+    if (st.server !== 'online') return;
+    st.enterT = 0; stage.classList.add('leaving'); hovered = null;
+  };
+  const STEPS = [[0, 'Подключение к серверу'], [1.2, 'Вход в аккаунт'], [2.4, 'Загрузка ресурсов сервера'], [4, 'Загрузка мира']];
+  $('cancel').onclick = () => {
+    st.connecting = false; st.enterT = -1; st.boost = 0;
+    stage.classList.remove('connecting', 'leaving');
+    enter.focus({ preventScroll: true });
+  };
+  const toast = $('toast'); let toastTimer = 0;
+  function say(text) { toast.textContent = text; toast.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, 2200); }
+  document.querySelectorAll('[data-screen]').forEach((b) => { b.onclick = () => say(`Откроется экран «${b.dataset.screen}» (он уже есть в моде)`); b.addEventListener('pointerenter', () => { hovered = b; }); b.addEventListener('pointerleave', () => { hovered = null; }); });
+  document.querySelector('[data-quit]').onclick = () => say('В игре эта кнопка закрывает Minecraft');
+  addEventListener('keydown', (e) => { if (e.key === 'Enter' && document.activeElement === document.body) enter.click(); if (e.key === 'Escape' && st.connecting) $('cancel').click(); });
+
+  // ---------- main loop ----------
+  let last = performance.now();
+  const flash = $('flash');
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now; const time = now / 1000;
+    const target = st.server === 'online' ? 1 : st.server === 'offline' ? 0 : 0.45;
+    st.power += (target - st.power) * Math.min(1, dt * 1.8);
+    st.pull += ((hovered === enter && st.server === 'online' ? 1 : 0) - st.pull) * Math.min(1, dt * 4);
+    if (st.server === 'offline' && !st.connecting) { st.recheck -= dt; if (st.recheck <= 0) check(); else $('enterSub').textContent = `Повторная проверка через ${Math.ceil(st.recheck)} с · нажмите, чтобы проверить сейчас`; }
+    if (st.enterT >= 0 && !st.connecting) {
+      st.enterT += dt;
+      st.boost = 1.5 * ease((st.enterT - 0.3) / 0.6);
+      flash.style.opacity = reduce ? 0 : ease((st.enterT - 0.78) / 0.22);
+      if (st.enterT >= 1.05) { st.connecting = true; st.connT = 0; stage.classList.add('connecting'); }
+    } else if (st.connecting) {
+      st.connT += dt;
+      flash.style.opacity = Math.max(0, 1 - st.connT / 0.5);
+      st.boost += (-0.35 - st.boost) * Math.min(1, dt * 2);
+      let label = STEPS[0][1]; for (const [t, l] of STEPS) if (st.connT >= t) label = l;
+      $('connStatus').textContent = label;
+      $('connSub').textContent = st.connT >= 4 ? 'В игре дальше открывается мир. В макете на этом всё.' : 'play.spellandiron.net';
+    } else { flash.style.opacity = 0; st.boost += (0 - st.boost) * Math.min(1, dt * 3); }
+    drawRift(time, dt);
+    animateHero(time, dt);
+    requestAnimationFrame(frame);
+  }
+
+  addEventListener('resize', layout);
+  layout();
+  setServer('checking');
+  requestAnimationFrame(() => stage.classList.remove('boot'));
+  setTimeout(() => setServer('online'), 1300);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
