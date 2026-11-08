@@ -101,6 +101,8 @@ jobs:
   end-to-end:
     needs: client-mod
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # only to publish the screenshots to the e2e-frames branch
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -169,23 +171,27 @@ jobs:
           [ $ok = 1 ] || { tail -120 client.log; exit 1; }
       # The awakening scene of Solo Status plays on the first entry: its frames are printed small (JPEG, base64)
       # so they can be read straight from the log, and the log lines show whether GeckoLib drew it.
+      # The awakening scene of Solo Status plays on the first entry. Its frames go to the e2e-frames branch
+      # (replaced each run), where they can be looked at without downloading the artifact.
       - name: Awakening scene frames
         if: always()
+        env:
+          TOKEN: ${{ github.token }}
         run: |
           grep -E "Awakening:" rift/client-mod/client.log | head -20 || true
+          ls rift/client-mod/run/screenshots/awakening-*.png > /dev/null 2>&1 || { echo "no awakening frames"; exit 0; }
           pip install -q pillow
-          python3 - <<'PY'
-          import base64, glob, io
+          mkdir -p /tmp/frames
+          python3 -c "
+          import glob
           from PIL import Image
-          from PIL import ImageOps
-          ramp = " .:-=+*#%@"
-          for p in sorted(glob.glob('rift/client-mod/run/screenshots/awakening-*.png')):
-              im = Image.open(p).convert('RGB')
-              print('FRAME', p.rsplit('/', 1)[-1], im.size, 'mean RGB', tuple(int(v) for v in im.resize((1, 1)).getpixel((0, 0))))
-              g = ImageOps.autocontrast(im.convert('L')).resize((110, 40))
-              for y in range(40):
-                  print('|' + ''.join(ramp[min(9, g.getpixel((x, y)) * 10 // 256)] for x in range(110)) + '|')
-          PY
+          for p in sorted(glob.glob('rift/client-mod/run/screenshots/*.png')):
+              im = Image.open(p).convert('RGB'); im.thumbnail((640, 360)); im.save('/tmp/frames/' + p.rsplit('/', 1)[-1])
+          "
+          grep -E "Awakening:|E2E:" rift/client-mod/client.log > /tmp/frames/log.txt || true
+          cd /tmp/frames && git init -q && git checkout -q -b e2e-frames && git add .
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "End-to-end frames, run $GITHUB_RUN_ID"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" e2e-frames
       - name: Stop the server
         if: always()
         run: pkill -f neoforge || true
