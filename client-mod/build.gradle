@@ -16,6 +16,8 @@ neoForge {
         client {
             client()
             systemProperty 'neoforge.enabledGameTestNamespaces', 'spellironrift'
+            // end-to-end runs with two players: ./gradlew runClient -Pe2eUser=Observer
+            if (project.hasProperty('e2eUser')) programArguments.addAll('--username', project.property('e2eUser').toString())
         }
     }
     mods {

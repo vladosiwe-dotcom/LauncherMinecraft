@@ -136,82 +136,115 @@ jobs:
       - name: Start the server
         run: |
           cd server
-          SOLO_E2E_BOT=1 nohup ./run.sh nogui > server.log 2>&1 &  # a second player wakes up in front of the client
+          SOLO_E2E_PLACE=1 nohup ./run.sh nogui > server.log 2>&1 &  # the second player to join is put in front of the first
           for i in $(seq 1 180); do
             if grep -q 'Done (' server.log; then echo "server is up"; exit 0; fi
             if [ -d crash-reports ] || ! pgrep -f 'neoforge' > /dev/null; then echo "::error::server crashed or exited while starting"; tail -80 server.log; exit 1; fi
             sleep 2
           done
           echo "::error::server did not start in 6 minutes"; tail -80 server.log; exit 1
-      - name: Prepare the game client
+      # Two real game clients: "Observer" joins first and waits; "Waker" joins later, is put in front of the
+      # Observer and wakes up. Each client has its own game folder and window (Xvfb display).
+      - name: Prepare two game clients
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri mesa-utils > /dev/null
-          RUN=rift/client-mod/run
-          mkdir -p $RUN/mods $RUN/spellironrift
-          cp mods-client/*.jar $RUN/mods/ 2>/dev/null || true
-          cp solo/build/libs/*.jar $RUN/mods/
-          cp rift/tools/e2e/options.txt $RUN/options.txt
-          echo '{"server":{"host":"127.0.0.1","port":25565},"apiBase":"","preset":"balanced","buildVersion":"e2e"}' > $RUN/spellironrift/launcher.json
-      - name: Play (menu, enter the rift, world, System window)
-        working-directory: rift/client-mod
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri mesa-utils ffmpeg > /dev/null
+          rsync -a --exclude run --exclude .gradle --exclude build rift/client-mod/ /tmp/clientB/
+          for RUN in rift/client-mod/run /tmp/clientB/run; do
+            mkdir -p $RUN/mods $RUN/spellironrift
+            cp mods-client/*.jar $RUN/mods/ 2>/dev/null || true
+            cp solo/build/libs/*.jar $RUN/mods/
+            cp rift/tools/e2e/options.txt $RUN/options.txt
+            echo '{"server":{"host":"127.0.0.1","port":25565},"apiBase":"","preset":"balanced","buildVersion":"e2e"}' > $RUN/spellironrift/launcher.json
+          done
+      - name: Play with two players (Observer watches Waker wake up)
         env:
           RIFT_E2E: '1'
           SOLO_E2E_SHOTS: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           set +e
-          timeout 1200 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClient --no-daemon > client.log 2>&1
-          echo "client exited with $?"
-          grep -E "E2E:" client.log || true
+          A=$PWD/rift/client-mod; B=/tmp/clientB
+          (cd $A && RIFT_E2E_WAIT_PLAYER=1 timeout 1800 xvfb-run -n 91 -s "-screen 0 1280x720x24" ./gradlew runClient --no-daemon -Pe2eUser=Observer > client.log 2>&1) &
+          PA=$!
+          for i in $(seq 1 600); do grep -q "E2E: in the world" $A/client.log 2>/dev/null && break; kill -0 $PA 2>/dev/null || break; sleep 2; done
+          grep -q "E2E: in the world" $A/client.log || { echo "::error::Observer did not get into the world"; tail -80 $A/client.log; exit 1; }
+          echo "Observer is in the world; starting Waker"
+          (cd $B && timeout 1500 xvfb-run -n 92 -s "-screen 0 1280x720x24" ./gradlew runClient --no-daemon -Pe2eUser=Waker > client.log 2>&1) &
+          PB=$!
+          wait $PB; echo "Waker exited with $?"
+          wait $PA; echo "Observer exited with $?"
           ok=1
-          grep -q "E2E: passed" client.log || { echo "::error::the player's path did not complete"; ok=0; }
-          if ls run/crash-reports/*.txt > /dev/null 2>&1; then echo "::error::client crash report"; head -60 run/crash-reports/*.txt; ok=0; fi
-          if ls ../../server/crash-reports/*.txt > /dev/null 2>&1; then echo "::error::server crash report"; head -60 ../../server/crash-reports/*.txt; ok=0; fi
-          grep -q "joined the game" ../../server/server.log || { echo "::error::nobody joined the server"; ok=0; }
-          [ $ok = 1 ] || { tail -120 client.log; exit 1; }
-      # The awakening scene of Solo Status plays on the first entry: its frames are printed small (JPEG, base64)
-      # so they can be read straight from the log, and the log lines show whether GeckoLib drew it.
-      # The awakening scene of Solo Status plays on the first entry. Its frames go to the e2e-frames branch
-      # (replaced each run), where they can be looked at without downloading the artifact.
-      - name: Awakening scene frames
+          for C in $A $B; do
+            grep -E "E2E:" $C/client.log | tail -12
+            grep -q "E2E: passed" $C/client.log || { echo "::error::$C did not complete the player's path"; tail -60 $C/client.log; ok=0; }
+            if ls $C/run/crash-reports/*.txt > /dev/null 2>&1; then echo "::error::client crash report in $C"; head -60 $C/run/crash-reports/*.txt; ok=0; fi
+          done
+          if ls server/crash-reports/*.txt > /dev/null 2>&1; then echo "::error::server crash report"; head -60 server/crash-reports/*.txt; ok=0; fi
+          grep -q "Observer joined the game" server/server.log && grep -q "Waker joined the game" server/server.log || { echo "::error::both players must join"; ok=0; }
+          [ $ok = 1 ] || exit 1
+      # What each client logged about the Waker's scene (game ticks): the scene must start, last and end at the
+      # same moments on the server, on the Waker's own client and on the Observer's client, and the Observer must
+      # see the Waker drawn as a normal player again afterwards.
+      - name: Multiplayer awakening in sync
+        run: |
+          python3 - <<'PY'
+          import re, os, sys
+          def lines(path, pat):
+              try: return [l for l in open(path, errors='replace') if pat in l]
+              except FileNotFoundError: return []
+          def tick(path, pat):
+              for l in lines(path, pat):
+                  m = re.search(r' at (-?\d+)', l)
+                  if m: return int(m.group(1))
+              return None
+          A, B, S = 'rift/client-mod/client.log', '/tmp/clientB/client.log', 'server/server.log'
+          v = {
+            'server start': tick(S, 'Awakening sync: server start Waker'),
+            'server end': tick(S, 'Awakening sync: server end Waker'),
+            'Waker sees own start': tick(B, 'Awakening sync: client own start Waker'),
+            'Waker sees own end': tick(B, 'Awakening sync: client own end Waker'),
+            'Waker view back to normal': tick(B, 'Awakening sync: client own view back to normal'),
+            'Observer sees start': tick(A, 'Awakening sync: client sees start Waker'),
+            'Observer sees end': tick(A, 'Awakening sync: client sees end Waker'),
+            'Observer sees normal player again': tick(A, 'Awakening sync: client sees Waker drawn as a normal player'),
+          }
+          rows = ['| Event | Game tick |', '|---|---|'] + [f'| {k} | {v[k]} |' for k in v]
+          errors = [f'missing: {k}' for k, x in v.items() if x is None]
+          if not errors:
+              s0 = v['server start']
+              def near(a, b, d, what):
+                  if abs(a - b) > d: errors.append(f'{what}: {a} vs {b}')
+              near(v['Waker sees own start'], s0, 3, 'Waker start vs server')
+              near(v['Observer sees start'], s0, 3, 'Observer start vs server')
+              near(v['server end'] - s0, 160, 2, 'server duration')
+              near(v['Waker sees own end'] - v['Waker sees own start'], 160, 2, 'Waker duration')
+              near(v['Observer sees end'] - v['Observer sees start'], 160, 2, 'Observer duration')
+              near(v['Observer sees end'], v['Waker sees own end'], 3, 'end on both clients')
+              if v['Observer sees normal player again'] < v['Observer sees end'] - 1: errors.append('Observer saw a normal player before the end')
+          report = '### Multiplayer awakening (Waker seen by Observer)\n\n' + '\n'.join(rows) + '\n\n' + ('**In sync.**' if not errors else '**Problems:** ' + '; '.join(errors)) + '\n'
+          print(report)
+          open(os.environ['GITHUB_STEP_SUMMARY'], 'a').write(report)
+          os.makedirs('/tmp/frames', exist_ok=True); open('/tmp/frames/sync.md', 'w').write(report)
+          sys.exit(1 if errors else 0)
+          PY
+      # Videos and logs go to the e2e-frames branch (replaced each run), where they can be looked at without
+      # downloading the artifact: the Observer's view of the Waker, and the Waker's own first-person view.
+      - name: Awakening videos
         if: always()
         env:
           TOKEN: ${{ github.token }}
         run: |
-          grep -E "Awakening:" rift/client-mod/client.log | head -20 || true
-          ls rift/client-mod/run/screenshots/awakening-*.png > /dev/null 2>&1 || { echo "no awakening frames"; exit 0; }
-          pip install -q pillow
           mkdir -p /tmp/frames
-          python3 -c "
-          import glob
-          from PIL import Image
-          for p in sorted(glob.glob('rift/client-mod/run/screenshots/*.png')):
-              im = Image.open(p).convert('RGB'); im.thumbnail((640, 360)); im.save('/tmp/frames/' + p.rsplit('/', 1)[-1])
-          "
-          grep -E "Awakening:|E2E:|Epic Fight:" rift/client-mod/client.log > /tmp/frames/log.txt || true
-          grep -E "Awakening e2e|Hunter_Bot|Exception" server/server.log | head -40 > /tmp/frames/server-log.txt || true
-          cp rift/client-mod/run/config/epicfight*.toml /tmp/frames/ 2>/dev/null || true
-          jar=$(ls mods-client/*epic*fight*.jar 2>/dev/null | head -1)
-          if [ -n "$jar" ]; then
-            { unzip -l "$jar" | grep -oE "yesman/[A-Za-z0-9_/$]*(PlayerPatch|Config|Option|FirstPerson|RenderEngine|PlayerMode)[A-Za-z0-9_$]*\.class" | sort -u
-              for c in yesman.epicfight.world.capabilities.entitypatch.player.PlayerPatch yesman.epicfight.client.world.capabilities.entitypatch.player.LocalPlayerPatch; do
-                echo "== $c"; javap -cp "$jar" "$c" 2>&1 | grep -iE "mode|battle|mining|class |firstperson|first_person"; done
-            } > /tmp/frames/epicfight-api.txt 2>&1 || true
-          fi
-          # the scene as a video: one frame per client tick (20 fps), 960 px wide
-          if ls rift/client-mod/run/screenshots/awakening-v-*.png > /dev/null 2>&1; then
-            command -v ffmpeg > /dev/null || sudo apt-get install -y -qq ffmpeg > /dev/null
-            ffmpeg -loglevel error -y -framerate 20 -i rift/client-mod/run/screenshots/awakening-v-%03d.png \
-              -vf "scale=960:-2" -c:v libx264 -pix_fmt yuv420p -movflags +faststart /tmp/frames/awakening.mp4
-            rm -f /tmp/frames/awakening-v-*.png
-          fi
-          # what the client saw of another player's awakening (the multiplayer view)
-          if ls rift/client-mod/run/screenshots/awakening-o-*.png > /dev/null 2>&1; then
-            ffmpeg -loglevel error -y -framerate 20 -i rift/client-mod/run/screenshots/awakening-o-%03d.png \
-              -vf "scale=960:-2" -c:v libx264 -pix_fmt yuv420p -movflags +faststart /tmp/frames/awakening-other.mp4
-            rm -f /tmp/frames/awakening-o-*.png
-            ls -la /tmp/frames/awakening.mp4
-          fi
+          A=rift/client-mod; B=/tmp/clientB
+          video() { ls $1/run/screenshots/$2-*.png > /dev/null 2>&1 && ffmpeg -loglevel error -y -framerate 20 -i $1/run/screenshots/$2-%03d.png \
+              -vf "scale=960:-2" -c:v libx264 -pix_fmt yuv420p -movflags +faststart /tmp/frames/$3; }
+          video $A awakening-o observer-sees-waker.mp4
+          video $B awakening-v waker-first-person.mp4
+          video $A awakening-v observer-own-entry.mp4
+          for C in $A $B; do n=$(basename $(dirname $C/run))-$(basename $C); grep -E "Awakening|E2E:|Epic Fight:" $C/client.log > /tmp/frames/log-$(basename $C).txt || true; done
+          grep -E "Awakening|joined the game|left the game|Exception" server/server.log | head -60 > /tmp/frames/server-log.txt || true
+          for C in $A $B; do for f in $C/run/screenshots/e2e-*.png; do [ -f "$f" ] && cp "$f" /tmp/frames/$(basename $C)-$(basename $f); done; done
+          ls -la /tmp/frames
           cd /tmp/frames && git init -q && git checkout -q -b e2e-frames && git add .
           git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "End-to-end frames, run $GITHUB_RUN_ID"
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${GITHUB_REPOSITORY}" e2e-frames
@@ -227,6 +260,8 @@ jobs:
             rift/client-mod/run/screenshots/
             rift/client-mod/client.log
             rift/client-mod/run/logs/latest.log
+            /tmp/clientB/client.log
+            /tmp/clientB/run/screenshots/
             rift/client-mod/run/crash-reports/
             server/server.log
             server/crash-reports/

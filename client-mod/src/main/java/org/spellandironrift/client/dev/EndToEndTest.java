@@ -20,6 +20,9 @@ import org.spellandironrift.client.net.ServerPing;
 @EventBusSubscriber(modid = RiftClientMod.MODID, value = Dist.CLIENT)
 public final class EndToEndTest {
     private static final boolean ON = "1".equals(System.getenv("RIFT_E2E"));
+    /** Two-player run: this client stays in the world until another player has joined and finished awakening. */
+    private static final boolean WAIT_PLAYER = "1".equals(System.getenv("RIFT_E2E_WAIT_PLAYER"));
+    private static long otherSeenAt;
     private static final long STARTED = System.currentTimeMillis();
     private static int stage;
     private static long stageAt = System.currentTimeMillis();
@@ -63,7 +66,7 @@ public final class EndToEndTest {
                 else if (scene.phase == RiftScene.Phase.BACK || scene.phase == RiftScene.Phase.MENU && t > 3000) fail("connection failed: " + (scene.backReason != null ? scene.backReason.getString() : "?"));
             }
             case 5 -> { if (t > 350) { shot("4-arrival"); next("arrival light"); } }
-            case 6 -> { if (t > 27000) { shot("5-world"); openSystemWindow(mc); next("opened the System window"); } }
+            case 6 -> { if (readyToLeave(mc, t)) { shot("5-world"); openSystemWindow(mc); next("opened the System window"); } }
             case 7 -> { if (t > 2500) { shot("6-system"); mc.setScreen(null); next("closed the System window"); } }
             case 8 -> {
                 if (t > 1500) {
@@ -74,7 +77,18 @@ public final class EndToEndTest {
             }
             default -> { }
         }
-        if (stage < 99 && System.currentTimeMillis() - STARTED > 12 * 60_000L) fail("timed out at stage " + stage);
+        if (stage < 99 && System.currentTimeMillis() - STARTED > (WAIT_PLAYER ? 25 : 12) * 60_000L) fail("timed out at stage " + stage);
+    }
+
+    /** One player: 13 s for the own awakening. Two players: until the other one joined 18 s ago (8 s scene + margin). */
+    private static boolean readyToLeave(Minecraft mc, long t) {
+        if (!WAIT_PLAYER) return t > 13000;
+        if (otherSeenAt == 0 && mc.level != null && mc.level.players().size() >= 2) {
+            otherSeenAt = System.currentTimeMillis();
+            RiftClientMod.LOG.info("E2E: another player is here");
+        }
+        if (otherSeenAt == 0 && t > 15 * 60_000L) fail("the second player never came");
+        return otherSeenAt > 0 && System.currentTimeMillis() - otherSeenAt > 18000;
     }
 
     private static void fail(String why) {
