@@ -11,6 +11,7 @@ import org.spellandironrift.client.RiftClientMod;
 import org.spellandironrift.client.gui.RiftMainMenuScreen;
 import org.spellandironrift.client.gui.RiftScene;
 import org.spellandironrift.client.net.ServerPing;
+import org.spellandironrift.client.sound.RiftMusic;
 
 /**
  * Automated end-to-end run used only by the GitHub test (environment variable RIFT_E2E=1; does nothing otherwise).
@@ -26,6 +27,8 @@ public final class EndToEndTest {
     private static final long STARTED = System.currentTimeMillis();
     private static int stage;
     private static long stageAt = System.currentTimeMillis();
+    private static long menuReadyAt;
+    private static int menuStep;
 
     private EndToEndTest() {}
 
@@ -47,11 +50,24 @@ public final class EndToEndTest {
         long t = System.currentTimeMillis() - stageAt;
         RiftScene scene = RiftScene.INSTANCE;
         switch (stage) {
-            case 0 -> { // main menu is up and the server answered the ping
-                if (mc.screen instanceof RiftMainMenuScreen && ServerPing.result().state() == ServerPing.State.ONLINE && t > 4000) { shot("1-menu"); next("menu shown, server online"); }
+            case 0 -> { // main menu is up (the loading overlay is gone and the menu has faded in) and the server answered
+                boolean ready = mc.screen instanceof RiftMainMenuScreen && mc.getOverlay() == null && ServerPing.result().state() == ServerPing.State.ONLINE;
+                if (!ready) menuReadyAt = 0;
+                else if (menuReadyAt == 0) menuReadyAt = System.currentTimeMillis();
+                else if (System.currentTimeMillis() - menuReadyAt > 2500 && t > 4000) { shot("1-menu"); next("menu shown, server online"); }
             }
-            case 1 -> {
-                if (t > 600 && mc.screen instanceof RiftMainMenuScreen menu) { menu.pressEnter(); next("pressed Enter the Rift"); }
+            case 1 -> { // the buttons as they look when pointed at; the menu stays up long enough for its music
+                if (!(mc.screen instanceof RiftMainMenuScreen menu)) break;
+                if (menuStep == 0 && t > 800) { menu.showFocus(0); menuStep++; }
+                else if (menuStep == 1 && t > 1600) { shot("1b-menu-enter-focus"); menuStep++; }
+                else if (menuStep == 2 && t > 2000) { menu.showFocus(2); menuStep++; }
+                else if (menuStep == 3 && t > 2800) { shot("1c-menu-row-focus"); menuStep++; }
+                else if (menuStep == 4 && t > 3200) { menu.showFocus(-1); menuStep++; }
+                else if (menuStep == 5 && t > 10000) {
+                    RiftClientMod.LOG.info("E2E: menu music {}", RiftMusic.playing() ? "playing" : "NOT playing");
+                    menu.pressEnter();
+                    next("pressed Enter the Rift");
+                }
             }
             case 2 -> { // dive into the rift (picture taken mid-dive)
                 if (scene.phase == RiftScene.Phase.ENTER && scene.enterT > 1.0f) { shot("2-dive"); next("camera dive"); }

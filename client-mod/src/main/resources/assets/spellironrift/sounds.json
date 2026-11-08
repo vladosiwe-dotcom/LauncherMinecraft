@@ -1,0 +1,6 @@
+{
+  "music.menu": {
+    "category": "music",
+    "sounds": [{ "name": "spellironrift:music/menu", "stream": true }]
+  }
+}

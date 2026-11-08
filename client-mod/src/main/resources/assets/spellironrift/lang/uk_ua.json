@@ -51,5 +51,8 @@
   "spellironrift.connect.cancel_hint": "Esc · Скасувати",
   "spellironrift.connect.cancelled": "Підключення скасовано.",
   "spellironrift.connect.failed": "Не вдалося підключитися: %s",
-  "spellironrift.connect.resources": "Завантаження ресурсів сервера"
+  "spellironrift.connect.resources": "Завантаження ресурсів сервера",
+  "spellironrift.settings.music": "Музика меню",
+  "spellironrift.settings.music_value": "Музика: %s%%",
+  "spellironrift.settings.music_off": "Музика: вимк"
 }

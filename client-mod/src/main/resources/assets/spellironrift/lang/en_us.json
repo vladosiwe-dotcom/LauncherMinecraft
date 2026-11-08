@@ -51,5 +51,8 @@
   "spellironrift.connect.cancel_hint": "Esc · Cancel",
   "spellironrift.connect.cancelled": "Connection cancelled.",
   "spellironrift.connect.failed": "Could not connect: %s",
-  "spellironrift.connect.resources": "Loading server resources"
+  "spellironrift.connect.resources": "Loading server resources",
+  "spellironrift.settings.music": "Menu music",
+  "spellironrift.settings.music_value": "Music: %s%%",
+  "spellironrift.settings.music_off": "Music: off"
 }

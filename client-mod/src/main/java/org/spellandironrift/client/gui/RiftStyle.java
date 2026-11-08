@@ -57,6 +57,14 @@ public final class RiftStyle {
         g.fillGradient(x + 1, y + 1, x + w - 1, y + h - 1, plateTop, plateBottom);
     }
 
+    /** A thin 1-pixel line just inside a frame, with open corners (the second line of a forged border). */
+    public static void inset(GuiGraphics g, int x, int y, int w, int h, int color) {
+        g.fill(x + 2, y, x + w - 2, y + 1, color);
+        g.fill(x + 2, y + h - 1, x + w - 2, y + h, color);
+        g.fill(x, y + 2, x + 1, y + h - 2, color);
+        g.fill(x + w - 1, y + 2, x + w, y + h - 2, color);
+    }
+
     public static void rune(GuiGraphics g, int index, int x, int y, int scale, int color) {
         int[] rows = RUNES[Math.floorMod(index, RUNES.length)];
         for (int r = 0; r < rows.length; r++)
