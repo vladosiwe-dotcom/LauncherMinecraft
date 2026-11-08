@@ -1,7 +1,7 @@
 {
   "spellironrift.menu.title": "Spell and Iron Rift",
   "spellironrift.logo.top": "SPELL & IRON",
-  "spellironrift.menu.enter": "Увійти в простір",
+  "spellironrift.menu.enter": "Увійти в Розлом",
   "spellironrift.menu.character": "Персонаж",
   "spellironrift.menu.settings": "Налаштування",
   "spellironrift.menu.news": "Новини",
@@ -34,5 +34,21 @@
   "spellironrift.preset.apply": "Застосувати",
   "spellironrift.preset.current": "Поточний",
   "spellironrift.preset.applied": "Профіль «%s» застосовано.",
-  "spellironrift.preset.shadersNextLaunch": "Профіль «%s» застосовано. Шейдери встановляться під час наступного запуску через лаунчер."
+  "spellironrift.preset.shadersNextLaunch": "Профіль «%s» застосовано. Шейдери встановляться під час наступного запуску через лаунчер.",
+  "spellironrift.menu.server": "Сервер",
+  "spellironrift.menu.online": "Онлайн",
+  "spellironrift.menu.offline": "Недоступний",
+  "spellironrift.menu.checking": "Перевірка",
+  "spellironrift.menu.players": "/ %s гравців",
+  "spellironrift.menu.ping": "%s мс",
+  "spellironrift.menu.no_answer": "немає відповіді",
+  "spellironrift.menu.offline_title": "Сервер недоступний",
+  "spellironrift.menu.offline_sub": "Повторна перевірка через %s с · натисніть, щоб перевірити зараз",
+  "spellironrift.menu.checking_sub": "Перевіряємо сервер…",
+  "spellironrift.menu.offline_motd": "Сервер не відповідає. Можливо, тривають технічні роботи.",
+  "spellironrift.connect.status": "Підключення до сервера",
+  "spellironrift.connect.loading": "Завантаження світу",
+  "spellironrift.connect.cancel_hint": "Esc · Скасувати",
+  "spellironrift.connect.cancelled": "Підключення скасовано.",
+  "spellironrift.connect.failed": "Не вдалося підключитися: %s"
 }

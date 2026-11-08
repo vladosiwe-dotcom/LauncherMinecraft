@@ -34,5 +34,21 @@
   "spellironrift.preset.apply": "Apply",
   "spellironrift.preset.current": "Current",
   "spellironrift.preset.applied": "Profile \"%s\" applied.",
-  "spellironrift.preset.shadersNextLaunch": "Profile \"%s\" applied. Shaders will be installed on the next launch from the launcher."
+  "spellironrift.preset.shadersNextLaunch": "Profile \"%s\" applied. Shaders will be installed on the next launch from the launcher.",
+  "spellironrift.menu.server": "Server",
+  "spellironrift.menu.online": "Online",
+  "spellironrift.menu.offline": "Offline",
+  "spellironrift.menu.checking": "Checking",
+  "spellironrift.menu.players": "/ %s players",
+  "spellironrift.menu.ping": "%s ms",
+  "spellironrift.menu.no_answer": "no answer",
+  "spellironrift.menu.offline_title": "Server offline",
+  "spellironrift.menu.offline_sub": "Checking again in %s s · click to check now",
+  "spellironrift.menu.checking_sub": "Checking the server…",
+  "spellironrift.menu.offline_motd": "The server does not answer. It may be under maintenance.",
+  "spellironrift.connect.status": "Connecting to the server",
+  "spellironrift.connect.loading": "Loading the world",
+  "spellironrift.connect.cancel_hint": "Esc · Cancel",
+  "spellironrift.connect.cancelled": "Connection cancelled.",
+  "spellironrift.connect.failed": "Could not connect: %s"
 }

@@ -1,0 +1,18 @@
+{
+  "providers": [
+    {
+      "type": "ttf",
+      "file": "spellironrift:cormorant_sc_bold.ttf",
+      "shift": [
+        0,
+        -1.0
+      ],
+      "size": 19,
+      "oversample": 4.0
+    },
+    {
+      "type": "reference",
+      "id": "minecraft:default"
+    }
+  ]
+}

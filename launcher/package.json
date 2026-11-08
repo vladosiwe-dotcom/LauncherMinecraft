@@ -12,7 +12,9 @@
     "start": "npm run build && electron .",
     "dist": "npm run build && electron-builder"
   },
-  "dependencies": { "@sir/shared": "0.1.0" },
+  "dependencies": {
+    "@sir/shared": "0.1.0"
+  },
   "devDependencies": {
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
@@ -25,9 +27,24 @@
   "build": {
     "appId": "org.spellandironrift.launcher",
     "productName": "Spell and Iron Rift",
-    "files": ["dist/**", "renderer/**", "config/**", "package.json"],
-    "win": { "target": "nsis" },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "files": [
+      "dist/**",
+      "renderer/**",
+      "config/**",
+      "package.json",
+      "assets/**"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.png"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
+    }
   }
 }

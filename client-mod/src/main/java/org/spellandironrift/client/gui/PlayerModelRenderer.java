@@ -60,6 +60,9 @@ public final class PlayerModelRenderer {
     public boolean isSlim() { return skin.model() == PlayerSkin.Model.SLIM; }
     public void cast() { castTimer = 0.9f; }
 
+    /** 0 = standing, 1 = walking (legs and arms swing); set by the rift scene while the character steps into the rift. */
+    public float stride;
+
     private PlayerModel<AbstractClientPlayer> model() {
         Minecraft mc = Minecraft.getInstance();
         if (isSlim()) {
@@ -127,6 +130,11 @@ public final class PlayerModelRenderer {
             m.rightArm.zRot = 0.25f * p;
         }
         m.rightLeg.xRot = 0; m.leftLeg.xRot = 0; m.rightLeg.zRot = 0.02f; m.leftLeg.zRot = -0.02f;
+        if (stride > 0) {
+            float swing = (float) Math.sin(t * 14) * 0.6f * stride;
+            m.rightLeg.xRot = swing; m.leftLeg.xRot = -swing;
+            m.rightArm.xRot = -swing * 0.8f; m.leftArm.xRot = swing * 0.8f;
+        }
         m.hat.copyFrom(m.head);
         m.jacket.copyFrom(m.body);
         m.rightSleeve.copyFrom(m.rightArm); m.leftSleeve.copyFrom(m.leftArm);

@@ -203,6 +203,7 @@ function currentPreset(): GraphicsPresetId {
 async function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 780, minWidth: 1100, minHeight: 680, frame: false, backgroundColor: '#0c0b10', show: false,
+    icon: join(appRoot, 'assets', 'icon.png'),
     webPreferences: { preload: join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, spellcheck: false },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
