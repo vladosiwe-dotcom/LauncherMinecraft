@@ -18,6 +18,11 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', 'spellironrift'
             // end-to-end runs with two players: ./gradlew runClient -Pe2eUser=Observer
             if (project.hasProperty('e2eUser')) programArguments.addAll('--username', project.property('e2eUser').toString())
+            // window size for screenshots that look like a player's screen: -Pe2eSize=1920x1080
+            if (project.hasProperty('e2eSize')) {
+                def wh = project.property('e2eSize').toString().split('x')
+                programArguments.addAll('--width', wh[0], '--height', wh[1])
+            }
         }
     }
     mods {

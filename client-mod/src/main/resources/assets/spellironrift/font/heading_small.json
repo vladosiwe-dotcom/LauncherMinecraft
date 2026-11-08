@@ -8,7 +8,7 @@
         0.5
       ],
       "size": 10,
-      "oversample": 4.0
+      "oversample": 3.0
     },
     {
       "type": "reference",

@@ -177,7 +177,7 @@ jobs:
         run: |
           set +e
           A=$PWD/rift/client-mod; B=/tmp/clientB
-          (cd $A && ALSOFT_CONF=/tmp/alsoft.conf ALSOFT_DRIVERS=wave RIFT_E2E_WAIT_PLAYER=1 timeout 1800 xvfb-run -n 91 -s "-screen 0 1280x720x24" ./gradlew runClient --no-daemon -Pe2eUser=Observer > client.log 2>&1) &
+          (cd $A && ALSOFT_CONF=/tmp/alsoft.conf ALSOFT_DRIVERS=wave RIFT_E2E_WAIT_PLAYER=1 timeout 1800 xvfb-run -n 91 -s "-screen 0 1920x1080x24" ./gradlew runClient --no-daemon -Pe2eUser=Observer -Pe2eSize=1920x1080 > client.log 2>&1) &
           PA=$!
           for i in $(seq 1 600); do grep -q "E2E: in the world" $A/client.log 2>/dev/null && break; kill -0 $PA 2>/dev/null || break; sleep 2; done
           grep -q "E2E: in the world" $A/client.log || { echo "::error::Observer did not get into the world"; tail -80 $A/client.log; exit 1; }
@@ -253,6 +253,7 @@ jobs:
           grep -E "Menu music|E2E: menu music|Sound engine|OpenAL" rift/client-mod/client.log | head -10 || true
           ls -l /tmp/observer-audio.wav || { echo "::warning::no game audio was recorded"; exit 0; }
           mkdir -p /tmp/frames
+          python3 -c "import numpy" 2>/dev/null || sudo apt-get install -y -qq python3-numpy > /dev/null
           ffmpeg -loglevel error -y -i /tmp/observer-audio.wav -ac 1 -ar 4000 -f s16le /tmp/rec.raw
           ffmpeg -loglevel error -y -i rift/client-mod/src/main/resources/assets/spellironrift/sounds/music/menu.ogg -ac 1 -ar 4000 -f s16le /tmp/theme.raw
           python3 - <<'PY'
@@ -273,7 +274,7 @@ jobs:
           S=$(cat /tmp/music_start); A=rift/client-mod/run/screenshots
           ffmpeg -loglevel error -y -ss $S -t 14 -i /tmp/observer-audio.wav -c:a pcm_s16le /tmp/menu-audio.wav
           printf "file '%s'\nduration 4\nfile '%s'\nduration 5\nfile '%s'\nduration 5\nfile '%s'\n" $PWD/$A/e2e-1-menu.png $PWD/$A/e2e-1b-menu-enter-focus.png $PWD/$A/e2e-1c-menu-row-focus.png $PWD/$A/e2e-1-menu.png > /tmp/menu-list.txt
-          ffmpeg -loglevel error -y -f concat -safe 0 -i /tmp/menu-list.txt -i /tmp/menu-audio.wav -vf "scale=1280:-2,format=yuv420p" -c:v libx264 -r 20 -c:a aac -b:a 160k -shortest -movflags +faststart /tmp/frames/menu-with-music.mp4
+          ffmpeg -loglevel error -y -f concat -safe 0 -i /tmp/menu-list.txt -i /tmp/menu-audio.wav -vf "scale=1920:-2,format=yuv420p" -c:v libx264 -r 20 -c:a aac -b:a 160k -shortest -movflags +faststart /tmp/frames/menu-with-music.mp4
           ls -l /tmp/frames/menu-with-music.mp4
       - name: Awakening videos
         if: always()

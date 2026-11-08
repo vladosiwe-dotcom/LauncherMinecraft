@@ -149,9 +149,10 @@ public class RiftMainMenuScreen extends Screen {
         g.blit(RiftDraw.SIGIL, 24, 20, 42, 42, 0f, 0f, 128, 128, 128, 128);
         g.setColor(1, 1, 1, 1);
         Component top = Component.empty().append(with(EYEBROW, "SPELL ")).append(with(EYEBROW, "&").withColor(RiftStyle.VIOLET & 0xFFFFFF)).append(with(EYEBROW, " IRON"));
-        g.drawString(f, top, 75, 24, argb(RiftStyle.GOLD, la), false);
-        g.drawString(f, with(LOGO, "RIFT"), 75, 34, argb(0x241A0B, la), false);
-        g.drawString(f, with(LOGO, "RIFT"), 74, 33, argb(RiftStyle.GOLD_HI, la), false);
+        g.drawString(f, top, 75, 22, argb(RiftStyle.GOLD, la), false);
+        // the large TTF glyphs grow upwards from the given y (about 18 units above it, 6 below): RIFT sits under the eyebrow
+        g.drawString(f, with(LOGO, "RIFT"), 75, 52, argb(0x241A0B, la), false);
+        g.drawString(f, with(LOGO, "RIFT"), 74, 51, argb(RiftStyle.GOLD_HI, la), false);
 
         // ---- server card
         float ca = appear(0.3f, a);
@@ -170,8 +171,8 @@ public class RiftMainMenuScreen extends Screen {
         g.fill(px + 3, cy + 10, px + 6, cy + 13, argb(pc, blink ? 0.2f * ca : ca));
         g.drawString(f, pill, px + 9, cy + 8, argb(pc, ca), false);
         Component count = with(COUNT, online ? String.valueOf(ping.online()) : "—");
-        g.drawString(f, count, cx + 10, cy + 20, argb(RiftStyle.TEXT, ca), false);
-        g.drawString(f, tr(BODY, "spellironrift.menu.players", online ? String.valueOf(ping.max()) : "—"), cx + 14 + f.width(count), cy + 28, argb(RiftStyle.TEXT_DIM, ca), false);
+        g.drawString(f, count, cx + 10, cy + 23, argb(RiftStyle.TEXT, ca), false);
+        g.drawString(f, tr(BODY, "spellironrift.menu.players", online ? String.valueOf(ping.max()) : "—"), cx + 14 + f.width(count), cy + 22, argb(RiftStyle.TEXT_DIM, ca), false);
         int meterW = cw - 20;
         g.fill(cx + 10, cy + 38, cx + 10 + meterW, cy + 40, argb(0xFFFFFF, 0.07f * ca));
         if (online && ping.max() > 0) {
