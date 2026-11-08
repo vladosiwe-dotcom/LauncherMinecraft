@@ -288,6 +288,9 @@ public class RiftMainMenuScreen extends Screen {
         ConnectScreen.startConnecting(this, Minecraft.getInstance(), ServerAddress.parseString(address), data, false, null);
     }
 
+    /** Same as clicking the main button (used by the automated end-to-end test). */
+    public void pressEnter() { enter(); }
+
     private void openCharacter() { minecraft.setScreen(new CharacterScreen(this, character())); }
     private void openSettings() { minecraft.setScreen(new RiftSettingsScreen(this)); }
     private void openNews() { minecraft.setScreen(new NewsScreen(this)); }

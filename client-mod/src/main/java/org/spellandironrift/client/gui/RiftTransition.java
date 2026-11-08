@@ -147,6 +147,22 @@ public final class RiftTransition {
         return screen.getTitle();
     }
 
+    /** Over Mojang's resource reload screen (server resource pack) while flying: keep showing the tunnel. */
+    public static void renderOverReload(GuiGraphics g) {
+        RiftScene scene = RiftScene.INSTANCE;
+        if (!scene.travelling()) return;
+        int w = g.guiWidth(), h = g.guiHeight();
+        scene.frame();
+        scene.layout(w, h);
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 1000);
+        scene.renderTunnel(g, w, h, 1);
+        Font font = Minecraft.getInstance().font;
+        Component status = with(HEADING, Component.translatable("spellironrift.connect.resources").getString().toUpperCase(java.util.Locale.ROOT));
+        g.drawString(font, status, w / 2 - font.width(status) / 2, (int) (h - 70 * (h / 360f)), argb(RiftStyle.GOLD_HI, 1), false);
+        g.pose().popPose();
+    }
+
     /** The world is open: start the arrival flash. */
     @SubscribeEvent
     public static void onTick(ClientTickEvent.Post event) {

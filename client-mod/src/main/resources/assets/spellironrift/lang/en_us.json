@@ -50,5 +50,6 @@
   "spellironrift.connect.loading": "Loading the world",
   "spellironrift.connect.cancel_hint": "Esc · Cancel",
   "spellironrift.connect.cancelled": "Connection cancelled.",
-  "spellironrift.connect.failed": "Could not connect: %s"
+  "spellironrift.connect.failed": "Could not connect: %s",
+  "spellironrift.connect.resources": "Loading server resources"
 }

@@ -14,6 +14,9 @@ direct connection to the official server, graphics presets and localization (ru,
 # Client-only: servers and other clients do not need this mod.
 displayTest = "IGNORE_ALL_VERSION"
 
+[[mixins]]
+config = "spellironrift.mixins.json"
+
 [[dependencies.spellironrift]]
 modId = "neoforge"
 type = "required"

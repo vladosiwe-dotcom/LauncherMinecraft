@@ -71,3 +71,91 @@ jobs:
           name: launcher-${{ matrix.os }}
           path: ${{ matrix.files }}
           if-no-files-found: error
+
+  # A real player's path: dedicated server with Solo Status + Create (+ optional mods), a game client with the
+  # Rift menu that presses "Enter the Rift", flies in, opens the System window and quits. Screenshots and logs
+  # are attached to the run. Fails on a crash report, a failed connection or a missing step.
+  end-to-end:
+    needs: client-mod
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: rift
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/skills-connection-7u72hg
+          path: solo
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build Solo Status
+        working-directory: solo
+        run: ./gradlew build --no-daemon -q && ls -l build/libs
+      - name: Fetch Create and other mods from Modrinth
+        run: python3 rift/tools/e2e/fetch_mods.py mods-server mods-client "$GITHUB_STEP_SUMMARY" required:create optional:sable optional:irons-spells-n-spellbooks optional:epic-fight
+      - name: Install a NeoForge 1.21.1 server
+        run: |
+          mkdir -p server/mods
+          curl -sSfL -o installer.jar https://maven.neoforged.net/releases/net/neoforged/neoforge/21.1.172/neoforge-21.1.172-installer.jar
+          (cd server && java -jar ../installer.jar --installServer . > install.log 2>&1)
+          echo "eula=true" > server/eula.txt
+          cp rift/tools/e2e/server.properties server/server.properties
+          echo "-Xmx3G" > server/user_jvm_args.txt
+          cp mods-server/*.jar server/mods/ 2>/dev/null || true
+          cp solo/build/libs/*.jar server/mods/
+          ls server/mods
+      - name: Start the server
+        run: |
+          cd server
+          nohup ./run.sh nogui > server.log 2>&1 &
+          for i in $(seq 1 180); do
+            if grep -q 'Done (' server.log; then echo "server is up"; exit 0; fi
+            if [ -d crash-reports ] || ! pgrep -f 'neoforge' > /dev/null; then echo "::error::server crashed or exited while starting"; tail -80 server.log; exit 1; fi
+            sleep 2
+          done
+          echo "::error::server did not start in 6 minutes"; tail -80 server.log; exit 1
+      - name: Prepare the game client
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq xvfb libgl1-mesa-dri mesa-utils > /dev/null
+          RUN=rift/client-mod/run
+          mkdir -p $RUN/mods $RUN/spellironrift
+          cp mods-client/*.jar $RUN/mods/ 2>/dev/null || true
+          cp solo/build/libs/*.jar $RUN/mods/
+          cp rift/tools/e2e/options.txt $RUN/options.txt
+          echo '{"server":{"host":"127.0.0.1","port":25565},"apiBase":"","preset":"balanced","buildVersion":"e2e"}' > $RUN/spellironrift/launcher.json
+      - name: Play (menu, enter the rift, world, System window)
+        working-directory: rift/client-mod
+        env:
+          RIFT_E2E: '1'
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: |
+          set +e
+          timeout 1200 xvfb-run -a -s "-screen 0 1280x720x24" ./gradlew runClient --no-daemon > client.log 2>&1
+          echo "client exited with $?"
+          grep -E "E2E:" client.log || true
+          ok=1
+          grep -q "E2E: passed" client.log || { echo "::error::the player's path did not complete"; ok=0; }
+          if ls run/crash-reports/*.txt > /dev/null 2>&1; then echo "::error::client crash report"; head -60 run/crash-reports/*.txt; ok=0; fi
+          if ls ../../server/crash-reports/*.txt > /dev/null 2>&1; then echo "::error::server crash report"; head -60 ../../server/crash-reports/*.txt; ok=0; fi
+          grep -q "joined the game" ../../server/server.log || { echo "::error::nobody joined the server"; ok=0; }
+          [ $ok = 1 ] || { tail -120 client.log; exit 1; }
+      - name: Stop the server
+        if: always()
+        run: pkill -f neoforge || true
+      - name: Screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: end-to-end
+          path: |
+            rift/client-mod/run/screenshots/
+            rift/client-mod/client.log
+            rift/client-mod/run/logs/latest.log
+            rift/client-mod/run/crash-reports/
+            server/server.log
+            server/crash-reports/
+          if-no-files-found: warn

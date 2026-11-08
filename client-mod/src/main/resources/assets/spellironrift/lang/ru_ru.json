@@ -50,5 +50,6 @@
   "spellironrift.connect.loading": "Загрузка мира",
   "spellironrift.connect.cancel_hint": "Esc · Отмена",
   "spellironrift.connect.cancelled": "Подключение отменено.",
-  "spellironrift.connect.failed": "Не удалось подключиться: %s"
+  "spellironrift.connect.failed": "Не удалось подключиться: %s",
+  "spellironrift.connect.resources": "Загрузка ресурсов сервера"
 }
