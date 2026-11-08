@@ -65,6 +65,9 @@ public final class EndToEndTest {
                 else if (menuStep == 4 && t > 3200) { menu.showFocus(-1); menuStep++; }
                 else if (menuStep == 5 && t > 10000) {
                     RiftClientMod.LOG.info("E2E: menu music {}", RiftMusic.playing() ? "playing" : "NOT playing");
+                    // the menu was photographed at the requested size; the rest runs in a small window so that two
+                    // software-rendered clients and the server keep real-time pace on the CI machine
+                    if (mc.getWindow().getWidth() > 1000) org.lwjgl.glfw.GLFW.glfwSetWindowSize(mc.getWindow().getWindow(), 854, 480);
                     menu.pressEnter();
                     next("pressed Enter the Rift");
                 }

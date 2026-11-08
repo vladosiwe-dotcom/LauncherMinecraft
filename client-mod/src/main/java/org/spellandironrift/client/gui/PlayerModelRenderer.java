@@ -101,10 +101,14 @@ public final class PlayerModelRenderer {
         float dx = (tx - cx) / scale, dy = (ty - headY) / scale;
         float targetHeadYaw = LOOK_SIGN * (float) Math.toDegrees(Math.atan(dx / 1.6f)) * 1.1f;
         float targetPitch = (float) Math.toDegrees(Math.atan(dy / 1.6f)) * 0.8f;
-        float targetBody = targetHeadYaw * 0.35f;
+        // a natural range: the body turns with the head, and a head looking far up turns sideways less
+        targetHeadYaw = Mth.clamp(targetHeadYaw, -50f, 50f);
+        targetPitch = Mth.clamp(targetPitch, -24f, 30f);
+        targetHeadYaw *= 1f - 0.4f * Math.max(0f, -targetPitch) / 24f;
+        float targetBody = targetHeadYaw * 0.5f;
         float k = Math.min(1f, dt * 6f);
-        headYaw = Mth.lerp(k, headYaw, Mth.clamp(targetHeadYaw, -70f, 70f));
-        headPitch = Mth.lerp(k, headPitch, Mth.clamp(targetPitch, -35f, 40f));
+        headYaw = Mth.lerp(k, headYaw, targetHeadYaw);
+        headPitch = Mth.lerp(k, headPitch, targetPitch);
         bodyYaw = Mth.lerp(k * 0.6f, bodyYaw, Mth.clamp(targetBody, -25f, 25f));
         if (castTimer > 0) castTimer -= dt;
 

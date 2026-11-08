@@ -45,8 +45,8 @@ public class RiftMainMenuScreen extends Screen {
     private boolean wasOverEnter;
 
     // layout of the buttons, in stage units (the stage is W x 360)
-    private static final int ENTER_W = 220, ENTER_H = 32, ENTER_Y = 298;
-    private static final int ROW_Y = 337, ROW_H = 19, ROW_GAP = 6;
+    private static final int ENTER_W = 220, ENTER_H = 32, ENTER_Y = 291;
+    private static final int ROW_Y = 331, ROW_H = 19, ROW_GAP = 7;
     @Nullable private Component error;
     private long errorAt;
 
@@ -246,7 +246,7 @@ public class RiftMainMenuScreen extends Screen {
             hoverRow[i] += ((hov ? 1 : 0) - hoverRow[i]) * Math.min(1, scene.dt * 12);
             float hv = hoverRow[i];
             boolean quitBtn = i == 3;
-            if (hv > 0.02f) RiftDraw.glow(g, x + rw / 2f, ROW_Y + ROW_H / 2f, rw * 0.6f, ROW_H * 1.3f, quitBtn ? 0xFF5068 : RiftStyle.VIOLET & 0xFFFFFF, 0.35f * hv * ra);
+            if (hv > 0.02f) RiftDraw.glow(g, x + rw / 2f, ROW_Y + ROW_H / 2f, rw * 0.6f, ROW_H * 1.3f, quitBtn ? 0xFF5068 : RiftStyle.VIOLET & 0xFFFFFF, 0.5f * hv * ra);
             int t = quitBtn ? RiftDraw.mix(0x3A1A28, 0x7A2438, hv) : RiftDraw.mix(0x30265A, 0x5236A8, hv);
             int bt = quitBtn ? 0x14090E : 0x110D20;
             int bd = quitBtn ? RiftDraw.mix(0x6A3040, 0xFF8A98, hv) : RiftDraw.mix(0x6A6084, RiftStyle.GOLD_HI & 0xFFFFFF, hv);
