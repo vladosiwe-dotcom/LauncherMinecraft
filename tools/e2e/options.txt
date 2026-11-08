@@ -1,3 +1,4 @@
+lang:ru_ru
 onboardAccessibility:false
 skipMultiplayerWarning:true
 joinedFirstServer:true

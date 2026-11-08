@@ -189,6 +189,7 @@ jobs:
               im = Image.open(p).convert('RGB'); im.thumbnail((640, 360)); im.save('/tmp/frames/' + p.rsplit('/', 1)[-1])
           "
           grep -E "Awakening:|E2E:" rift/client-mod/client.log > /tmp/frames/log.txt || true
+          cp rift/client-mod/run/config/epicfight*.toml /tmp/frames/ 2>/dev/null || true
           # the scene as a video: one frame per client tick (20 fps), 960 px wide
           if ls rift/client-mod/run/screenshots/awakening-v-*.png > /dev/null 2>&1; then
             command -v ffmpeg > /dev/null || sudo apt-get install -y -qq ffmpeg > /dev/null
