@@ -1,0 +1,29 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "All rights reserved"
+
+[[mods]]
+modId = "spellironrift_guard"
+version = "${mod_version}"
+displayName = "Spell and Iron Rift Guard"
+authors = "Spell and Iron Rift team"
+description = '''
+Server side of Spell and Iron Rift accounts: lets in only Minecraft profiles linked to an active project
+account, applies the account's role (moderator / admin) and shows the project nickname. Needs online-mode=true.
+'''
+# Server-only: players do not need this mod.
+displayTest = "IGNORE_SERVER_VERSION"
+
+[[dependencies.spellironrift_guard]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1.0,)"
+ordering = "NONE"
+side = "SERVER"
+
+[[dependencies.spellironrift_guard]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.21.2)"
+ordering = "NONE"
+side = "SERVER"

@@ -16,3 +16,6 @@ server/backups/
 launcher/renderer/fonts/
 preview/dist/
 launcher/.stage/
+server-mod/.gradle/
+server-mod/build/
+server-mod/run/
