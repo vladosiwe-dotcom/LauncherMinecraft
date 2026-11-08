@@ -160,7 +160,7 @@ public class RiftMainMenuScreen extends Screen {
         String motd = offline ? Component.translatable("spellironrift.menu.offline_motd").getString() : ping.motd();
         List<FormattedCharSequence> motdLines = motd.isEmpty() ? List.of() : f.split(with(BODY, motd), cw - 20);
         if (motdLines.size() > 2) motdLines = motdLines.subList(0, 2);
-        int ch = 52 + (motdLines.isEmpty() ? 0 : 6 + motdLines.size() * 8);
+        int ch = motdLines.isEmpty() ? 54 : 62 + motdLines.size() * 9; // every line fully inside the card
         RiftStyle.frame(g, cx, cy, cw, ch, argb(0x1F1C29, 0.86f * ca), argb(0x0D0C12, 0.9f * ca), argb(0x7D5E2B, ca));
         g.drawString(f, tr(EYEBROW, "spellironrift.menu.server"), cx + 10, cy + 8, argb(RiftStyle.GOLD, ca), false);
         Component pill = tr(BODY_MEDIUM, online ? "spellironrift.menu.online" : offline ? "spellironrift.menu.offline" : "spellironrift.menu.checking");
@@ -191,56 +191,50 @@ public class RiftMainMenuScreen extends Screen {
         }
         if (!motdLines.isEmpty()) {
             g.fill(cx + 10, cy + 55, cx + cw - 10, cy + 56, argb(0x7D5E2B, 0.35f * ca));
-            int my2 = cy + 59;
-            for (FormattedCharSequence line : motdLines) { g.drawString(f, line, cx + 10, my2, argb(RiftStyle.TEXT_DIM, ca), false); my2 += 8; }
+            int my2 = cy + 60;
+            for (FormattedCharSequence line : motdLines) { g.drawString(f, line, cx + 10, my2, argb(RiftStyle.TEXT_DIM, ca), false); my2 += 9; }
         }
 
-        // ---- main action, under the character's feet
+        // ---- main action, under the character's feet: a banner with pointed ends
         float ea = appear(0.45f, a);
         int bx = W / 2 - ENTER_W / 2, by = ENTER_Y, bw = ENTER_W, bh = ENTER_H;
         boolean sealed = offline;
         float time = (System.currentTimeMillis() % 100000L) / 1000f;
+        float pulse = 0.5f + 0.5f * (float) Math.sin(time * 2.2f);
         int gold = RiftStyle.GOLD & 0xFFFFFF;
-        if (!sealed) RiftDraw.glow(g, W / 2f, by + bh / 2f, bw * (0.55f + 0.1f * hoverEnter), bh * 1.3f, RiftStyle.VIOLET & 0xFFFFFF, (0.18f + 0.3f * hoverEnter) * ea);
-        int border = sealed ? 0x4A4757 : RiftDraw.mix(0x7D5E2B, gold, 0.35f + 0.65f * hoverEnter);
-        RiftStyle.frame(g, bx, by, bw, bh,
-                argb(sealed ? 0x1C1A24 : RiftDraw.mix(0x231B38, 0x34245F, hoverEnter), 0.97f * ea),
-                argb(sealed ? 0x0C0B10 : 0x0B0911, 0.97f * ea), argb(border, ea));
-        // inner forged line and corner studs
-        RiftStyle.inset(g, bx + 3, by + 3, bw - 6, bh - 6, argb(sealed ? 0x2C2A36 : 0x7D5E2B, (0.35f + 0.25f * hoverEnter) * ea));
-        for (int[] c : new int[][]{{bx + 1, by + 1}, {bx + bw - 3, by + 1}, {bx + 1, by + bh - 3}, {bx + bw - 3, by + bh - 3}})
-            g.fill(c[0], c[1], c[0] + 2, c[1] + 2, argb(sealed ? 0x4A4757 : RiftStyle.GOLD_HI & 0xFFFFFF, ea));
+        if (!sealed) {
+            RiftDraw.glow(g, W / 2f, by + bh / 2f, bw * (0.62f + 0.12f * hoverEnter), bh * (1.5f + 0.3f * pulse), RiftStyle.VIOLET & 0xFFFFFF, (0.30f + 0.08f * pulse + 0.35f * hoverEnter) * ea);
+            RiftDraw.glow(g, W / 2f, by + bh, bw * 0.5f, bh * 0.6f, RiftStyle.ARCANE & 0xFFFFFF, (0.10f + 0.2f * hoverEnter) * ea);
+        }
+        int topC = sealed ? argb(0x2A2736, 0.96f * ea) : argb(RiftDraw.mix(0x5A36C0, 0x7C4FF0, hoverEnter), 0.97f * ea);
+        int botC = sealed ? argb(0x0E0D14, 0.96f * ea) : argb(RiftDraw.mix(0x170C36, 0x24104E, hoverEnter), 0.97f * ea);
+        int border = sealed ? argb(0x4A4757, ea) : argb(RiftDraw.mix(RiftStyle.GOLD_LO & 0xFFFFFF, RiftStyle.GOLD_HI & 0xFFFFFF, 0.45f + 0.35f * pulse * (1 - hoverEnter) + 0.55f * hoverEnter), ea);
+        int inner = sealed ? 0 : argb(gold, (0.25f + 0.25f * hoverEnter) * ea);
+        RiftStyle.banner(g, bx, by, bw, bh, 11, topC, botC, border, inner, (0.10f + 0.06f * hoverEnter) * ea);
         // light running across the plate every few seconds
         if (!sealed) {
-            float sweep = (time % 4.5f) / 1.1f; // 0..1 during the first 1.1 s of each 4.5 s
+            float sweep = (time % 4.5f) / 1.1f;
             if (sweep < 1) {
-                int sxp = bx + 2 + Math.round((bw - 16) * ease(sweep));
+                int sxp = bx + 12 + Math.round((bw - 36) * ease(sweep));
                 for (int i = 0; i < 12; i++) {
                     float k = 1 - Math.abs(i - 6) / 6f;
-                    g.fill(sxp + i, by + 2, sxp + i + 1, by + bh - 2, argb(0xFFF4D8, 0.10f * k * ea));
+                    g.fill(sxp + i, by + 2, sxp + i + 1, by + bh - 2, argb(0xFFF4D8, 0.12f * k * ea));
                 }
             }
         }
-        // rune sockets on both ends
-        int sock = bh - 12;
-        for (int side = 0; side < 2; side++) {
-            int sx0 = side == 0 ? bx + 7 : bx + bw - 7 - sock, sy0 = by + 6;
-            RiftStyle.frame(g, sx0, sy0, sock, sock, argb(0x120F1C, ea), argb(0x0A0910, ea), argb(sealed ? 0x2C2A36 : RiftDraw.mix(0x7D5E2B, gold, hoverEnter), ea));
-            float pulse = 0.5f + 0.5f * (float) Math.sin(time * 3 + side * Math.PI);
-            int runeC = sealed ? 0x4A4757 : RiftDraw.mix(RiftStyle.VIOLET & 0xFFFFFF, RiftStyle.ARCANE & 0xFFFFFF, Math.max(hoverEnter, 0.35f * pulse));
-            RiftStyle.rune(g, 0, sx0 + (sock - 10) / 2, sy0 + (sock - 14) / 2, 2, argb(runeC, ea));
-        }
+        // gold diamonds near the tips
+        diamond(g, bx + 14, by + bh / 2, sealed ? 0x4A4757 : RiftDraw.mix(gold, RiftStyle.GOLD_HI & 0xFFFFFF, hoverEnter), ea);
+        diamond(g, bx + bw - 15, by + bh / 2, sealed ? 0x4A4757 : RiftDraw.mix(gold, RiftStyle.GOLD_HI & 0xFFFFFF, hoverEnter), ea);
         Component label = tr(HEADING, sealed ? "spellironrift.menu.offline_title" : "spellironrift.menu.enter");
-        int lx = W / 2 - f.width(label) / 2 + Math.round(hoverEnter);
-        g.drawString(f, label, lx + 1, by + 7, argb(0x120C05, 0.8f * ea), false);
-        g.drawString(f, label, lx, by + 6, argb(sealed ? RiftStyle.TEXT_DIM : RiftDraw.mix(RiftStyle.GOLD & 0xFFFFFF, RiftStyle.GOLD_HI & 0xFFFFFF, 0.5f + 0.5f * hoverEnter), ea), false);
+        int lx = W / 2 - f.width(label) / 2;
+        g.drawString(f, label, lx + 1, by + 7, argb(0x0A0618, 0.85f * ea), false);
+        g.drawString(f, label, lx, by + 6, argb(sealed ? RiftStyle.TEXT_DIM : RiftDraw.mix(0xFFF1CF, 0xFFFFFF, hoverEnter), ea), false);
         Component sub = online ? (ping.pingMs() > 0 ? with(BODY, cfg.serverHost() + " · ").append(tr(BODY, "spellironrift.menu.ping", ping.pingMs())) : with(BODY, cfg.serverHost()))
                 : offline ? tr(BODY, "spellironrift.menu.offline_sub", ServerPing.secondsToNextCheck()) : tr(BODY, "spellironrift.menu.checking_sub");
-        g.drawString(f, sub, W / 2 - f.width(sub) / 2, by + 20, argb(RiftStyle.TEXT_DIM, ea), false);
-        if (keyboard && focus == 0) g.renderOutline(bx - 2, by - 2, bw + 4, bh + 4, argb(RiftStyle.GOLD, 0.6f * ea));
+        g.drawString(f, sub, W / 2 - f.width(sub) / 2, by + 20, argb(sealed ? RiftStyle.TEXT_DIM : 0xD8CCF5, ea), false);
         hits.add(new Hit(bx, by, bw, bh, this::enter));
 
-        // ---- secondary row: forged buttons with a rune each
+        // ---- secondary row: smaller banners with a rune each (Exit in red)
         float ra = appear(0.55f, a);
         String[] keys = {"spellironrift.menu.character", "spellironrift.menu.settings", "spellironrift.menu.news", "spellironrift.menu.quit"};
         int[] runes = {1, 2, 3, 4};
@@ -252,18 +246,16 @@ public class RiftMainMenuScreen extends Screen {
             hoverRow[i] += ((hov ? 1 : 0) - hoverRow[i]) * Math.min(1, scene.dt * 12);
             float hv = hoverRow[i];
             boolean quitBtn = i == 3;
-            int accent = quitBtn ? 0xD0606E : gold;
-            if (hv > 0.02f) RiftDraw.glow(g, x + rw / 2f, ROW_Y + ROW_H / 2f, rw * 0.55f, ROW_H * 1.1f, quitBtn ? 0xFF6070 : RiftStyle.VIOLET & 0xFFFFFF, 0.22f * hv * ra);
-            RiftStyle.frame(g, x, ROW_Y, rw, ROW_H, argb(RiftDraw.mix(0x1F1C29, quitBtn ? 0x3A1C26 : 0x2B1F48, hv), 0.92f * ra), argb(0x0D0C12, 0.94f * ra),
-                    argb(RiftDraw.mix(0x4A4757, accent, hv), ra));
-            int s = ROW_H - 6;
-            RiftStyle.frame(g, x + 3, ROW_Y + 3, s, s, argb(0x120F1C, ra), argb(0x0A0910, ra), argb(RiftDraw.mix(0x23212C, quitBtn ? 0x7A3540 : 0x7D5E2B, hv), ra));
-            RiftStyle.rune(g, runes[i], x + 3 + (s - 5) / 2, ROW_Y + 3 + (s - 7) / 2, 1,
-                    argb(RiftDraw.mix(quitBtn ? 0x7A3540 : RiftStyle.VIOLET_LO & 0xFFFFFF, quitBtn ? 0xFF8090 : RiftStyle.ARCANE & 0xFFFFFF, hv), ra));
+            if (hv > 0.02f) RiftDraw.glow(g, x + rw / 2f, ROW_Y + ROW_H / 2f, rw * 0.6f, ROW_H * 1.3f, quitBtn ? 0xFF5068 : RiftStyle.VIOLET & 0xFFFFFF, 0.35f * hv * ra);
+            int t = quitBtn ? RiftDraw.mix(0x3A1A28, 0x7A2438, hv) : RiftDraw.mix(0x30265A, 0x5236A8, hv);
+            int bt = quitBtn ? 0x14090E : 0x110D20;
+            int bd = quitBtn ? RiftDraw.mix(0x6A3040, 0xFF8A98, hv) : RiftDraw.mix(0x6A6084, RiftStyle.GOLD_HI & 0xFFFFFF, hv);
+            RiftStyle.banner(g, x, ROW_Y, rw, ROW_H, 6, argb(t, 0.95f * ra), argb(bt, 0.95f * ra), argb(bd, ra), 0, (0.07f + 0.06f * hv) * ra);
             Component lab = with(BODY_MEDIUM, Component.translatable(keys[i]).getString().toUpperCase(java.util.Locale.ROOT));
-            int tx = x + s + 6 + (rw - s - 9 - f.width(lab)) / 2 + Math.round(hv);
-            g.drawString(f, lab, tx, ROW_Y + 6, argb(RiftDraw.mix(RiftStyle.TEXT_DIM & 0xFFFFFF, quitBtn ? 0xFFC0C8 : RiftStyle.GOLD_HI & 0xFFFFFF, hv), ra), false);
-            if (hv > 0.02f) g.fill(x + s + 6, ROW_Y + ROW_H - 3, x + s + 6 + Math.round((rw - s - 10) * hv), ROW_Y + ROW_H - 2, argb(accent, 0.85f * ra));
+            int iconW = 7, gap = 4, total = iconW + gap + f.width(lab);
+            int ix = x + (rw - total) / 2, iy = ROW_Y + (ROW_H - 7) / 2;
+            RiftStyle.rune(g, runes[i], ix + 1, iy, 1, argb(RiftDraw.mix(quitBtn ? 0xC05A6A : 0x9C86E8, quitBtn ? 0xFFC0C8 : RiftStyle.ARCANE & 0xFFFFFF, hv), ra));
+            g.drawString(f, lab, ix + iconW + gap, ROW_Y + 6, argb(RiftDraw.mix(0xD9D2EA, quitBtn ? 0xFFD6DB : RiftStyle.GOLD_HI & 0xFFFFFF, hv), ra), false);
             hits.add(new Hit(x, ROW_Y, rw, ROW_H, actions[i]));
         }
 

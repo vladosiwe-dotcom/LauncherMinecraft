@@ -1,6 +1,8 @@
 package org.spellandironrift.client.gui;
 
+import com.mojang.blaze3d.vertex.BufferBuilder;
 import net.minecraft.client.gui.GuiGraphics;
+import org.joml.Matrix4f;
 
 /** Palette and pixel-art drawing helpers shared by every Spell and Iron Rift screen. */
 public final class RiftStyle {
@@ -55,6 +57,42 @@ public final class RiftStyle {
             g.fill(x + w - c + i - 1, y + h - i - 1, x + w - c + i, y + h - i, border);
         }
         g.fillGradient(x + 1, y + 1, x + w - 1, y + h - 1, plateTop, plateBottom);
+    }
+
+    /** Mixes two ARGB colours, alpha included. */
+    public static int mixArgb(int a, int b, float t) {
+        return lerpColor(a, b, Math.max(0, Math.min(1, t)));
+    }
+
+    /**
+     * Banner-shaped plate with pointed ends: a vertical gradient, a glassy upper half, a border and, if inner is not
+     * transparent, a second thin line inside it. Drawn immediately (pending GUI fills are flushed first).
+     */
+    public static void banner(GuiGraphics g, float x, float y, float w, float h, float tip, int top, int bottom, int border, int inner, float shine) {
+        g.flush();
+        Matrix4f m = g.pose().last().pose();
+        float my = y + h / 2f;
+        int mid = mixArgb(top, bottom, 0.5f);
+        BufferBuilder b = RiftDraw.begin(false);
+        RiftDraw.quad(b, m, x + tip, y, x + tip, y + h, x + w - tip, y + h, x + w - tip, y, top, bottom, bottom, top);
+        RiftDraw.quad(b, m, x + tip, y, x, my, x + tip, y + h, x + tip, y + h, top, mid, bottom, bottom);
+        RiftDraw.quad(b, m, x + w - tip, y, x + w, my, x + w - tip, y + h, x + w - tip, y + h, top, mid, bottom, bottom);
+        if (shine > 0) {
+            int s0 = withAlpha(0xFFFFFFFF, shine), s1 = withAlpha(0xFFFFFFFF, 0);
+            RiftDraw.quad(b, m, x + tip, y + 1, x + tip, my, x + w - tip, my, x + w - tip, y + 1, s0, s1, s1, s0);
+            RiftDraw.quad(b, m, x + tip, y + 1, x + 1.5f, my, x + tip, my, x + tip, my, s0, s1, s1, s1);
+            RiftDraw.quad(b, m, x + w - tip, y + 1, x + w - 1.5f, my, x + w - tip, my, x + w - tip, my, s0, s1, s1, s1);
+        }
+        outline(b, m, x, y, w, h, tip, 1f, border);
+        if ((inner >>> 24) > 0) outline(b, m, x + 3, y + 2.5f, w - 6, h - 5, Math.max(1, tip - 2.5f), 0.7f, inner);
+        RiftDraw.end(b);
+    }
+
+    private static void outline(BufferBuilder b, Matrix4f m, float x, float y, float w, float h, float tip, float width, int argb) {
+        float my = y + h / 2f, half = width / 2f;
+        float[] xs = {x + half, x + tip, x + w - tip, x + w - half, x + w - tip, x + tip, x + half};
+        float[] ys = {my, y + half, y + half, my, y + h - half, y + h - half, my};
+        RiftDraw.polyline(b, m, xs, ys, 7, width, argb);
     }
 
     /** A thin 1-pixel line just inside a frame, with open corners (the second line of a forged border). */
