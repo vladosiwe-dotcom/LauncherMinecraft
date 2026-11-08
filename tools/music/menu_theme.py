@@ -1,171 +1,171 @@
 """
-Main-menu theme for Spell and Iron Rift: a calm piano piece, synthesised from scratch (no samples, no
-third-party music). Original composition.
+Main-menu theme for Spell and Iron Rift: "Rift Lullaby", an original calm neoclassical piece.
 
-A minor, 63 bpm. Soft felt piano: broken chords in the left hand, a simple melody in the right; a very quiet
-string pad underneath; in the second half the melody rises an octave with a music-box doubling. Piano tone is
-additive (slightly inharmonic partials, brighter and faster-decaying high partials, a soft hammer), the room is
-a circular convolution reverb, so the end flows straight into the start and the track loops without a seam.
+F minor, 66 bpm, 28 bars (~102 s), loops without a seam. Piano ostinato (broken chords, soft), a solo violin
+melody that swells in and out, a cello holding the bass, a whisper of string ensemble for warmth, and in the
+middle section a very soft clock tick. The score is written here as MIDI and played with FluidSynth on the
+FluidR3 General MIDI SoundFont (MIT licence), so the instruments are real recorded samples, not synthesis.
 
+    sudo apt-get install fluidsynth fluid-soundfont-gm && pip install mido
     python3 tools/music/menu_theme.py out.wav      # then: ffmpeg -i out.wav -c:a libvorbis -q:a 4 menu.ogg
 """
+import subprocess
 import sys
+import tempfile
 import wave
+from pathlib import Path
+
+import mido
 import numpy as np
 
+SF2 = "/usr/share/sounds/sf2/FluidR3_GM.sf2"
+BPM = 66
+TPB = 480                      # ticks per beat
 SR = 44100
-BPM = 63
-BEAT = 60 / BPM
-BAR = 4 * BEAT
-rng = np.random.default_rng(3)
+rng = np.random.default_rng(5)
+
+# chord: bass note (cello/left hand), three right-hand tones low to high
+CH = {
+    "Fm": (41, [60, 65, 68]), "Db": (37, [61, 65, 68]), "Ab": (44, [60, 63, 68]), "Eb": (39, [58, 63, 67]),
+    "Bbm": (46, [61, 65, 70]), "C": (36, [60, 64, 67]), "Cm": (36, [60, 63, 67]), "Csus": (36, [60, 65, 67]),
+}
+INTRO = ["Fm", "Db", "Fm", "Db"]
+A = ["Fm", "Db", "Ab", "Eb", "Fm", "Db", "Bbm", "C"]
+B = ["Db", "Eb", "Fm", "Cm", "Db", "Eb", "Csus", "C"]
+A2 = ["Fm", "Db", "Bbm", "C"]
+OUTRO = ["Fm", "Db", "Fm", "Fm"]
+BARS = INTRO + A + B + A2 + OUTRO
+
+# violin melody per section: list of bars, each [(midi, beats)]
+MEL_A = [[(72, 2), (68, 1), (70, 1)], [(72, 4)], [(75, 2), (73, 1), (72, 1)], [(70, 4)],
+         [(72, 2), (77, 2)], [(75, 2), (73, 1), (72, 1)], [(73, 2), (72, 1), (70, 1)], [(72, 4)]]
+MEL_B = [[(77, 4)], [(79, 2), (75, 2)], [(80, 3), (79, 1)], [(79, 2), (75, 2)],
+         [(77, 2), (80, 2)], [(79, 2), (77, 1), (75, 1)], [(77, 4)], [(76, 4)]]
+MEL_A2 = [[(72, 2), (68, 2)], [(68, 4)], [(73, 2), (72, 1), (70, 1)], [(72, 4)]]
 
 
-def hz(midi):
-    return 440.0 * 2 ** ((midi - 69) / 12)
+def jitter(ms=8):
+    return int(rng.normal(0, ms / 1000 * BPM / 60 * TPB))
 
 
-# 16 bars, played twice (second time with the melody an octave up and a music box)
-CHORDS = [  # root (low) and the chord tones above it
-    (45, [57, 60, 64]),  # Am
-    (41, [57, 60, 65]),  # F
-    (48, [55, 60, 64]),  # C
-    (43, [55, 59, 62]),  # G
-    (45, [57, 60, 64]),  # Am
-    (41, [57, 60, 65]),  # F
-    (43, [55, 59, 62]),  # G
-    (40, [56, 59, 64]),  # E
-    (41, [57, 60, 65]),  # F
-    (43, [55, 59, 62]),  # G
-    (40, [55, 59, 64]),  # Em
-    (45, [57, 60, 64]),  # Am
-    (41, [57, 60, 65]),  # F
-    (43, [55, 59, 62]),  # G
-    (48, [55, 60, 64]),  # C
-    (40, [56, 59, 64]),  # E
-]
-# melody per bar: (midi, beats); None = rest
-MELODY = [
-    [(76, 1.5), (74, .5), (72, 2)],
-    [(69, 3), (72, 1)],
-    [(67, 2), (72, 1), (71, 1)],
-    [(74, 4)],
-    [(76, 1.5), (77, .5), (76, 1), (74, 1)],
-    [(72, 2), (69, 2)],
-    [(71, 2), (74, 1), (71, 1)],
-    [(68, 2), (71, 2)],
-    [(69, 1), (72, 1), (77, 2)],
-    [(76, 1.5), (74, .5), (71, 2)],
-    [(71, 1), (74, 1), (79, 2)],
-    [(76, 4)],
-    [(77, 1.5), (76, .5), (72, 2)],
-    [(74, 1.5), (72, .5), (71, 2)],
-    [(72, 1), (67, 1), (64, 2)],
-    [(68, 2), (71, 1), (None, 1)],
-]
-SECTIONS = 2
-N = int(round(BAR * len(CHORDS) * SECTIONS * SR))
-L = np.zeros(N)
-R = np.zeros(N)
+class Track:
+    def __init__(self, ch, program, volume):
+        self.ch, self.ev = ch, []
+        self.ev.append((0, mido.Message("program_change", channel=ch, program=program)))
+        self.ev.append((0, mido.Message("control_change", channel=ch, control=7, value=volume)))
+        self.ev.append((0, mido.Message("control_change", channel=ch, control=11, value=100)))
+
+    def note(self, start, beats, midi, vel):
+        t0 = max(0, start + jitter())
+        t1 = t0 + int(beats * TPB) - 10
+        self.ev.append((t0, mido.Message("note_on", channel=self.ch, note=midi, velocity=int(np.clip(vel, 1, 127)))))
+        self.ev.append((t1, mido.Message("note_off", channel=self.ch, note=midi, velocity=0)))
+
+    def cc(self, t, control, value):
+        self.ev.append((max(0, t), mido.Message("control_change", channel=self.ch, control=control, value=int(np.clip(value, 0, 127)))))
+
+    def swell(self, start, beats, lo, hi):
+        """Expression rises over the first 60 % of a note and eases back."""
+        n = int(beats * 8)
+        for i in range(n + 1):
+            x = i / n
+            v = lo + (hi - lo) * (np.sin(np.pi * min(1, x / 0.6) / 2) if x < 0.6 else 1 - 0.35 * (x - 0.6) / 0.4)
+            self.cc(start + int(x * beats * TPB), 11, v)
+
+    def midi_track(self):
+        tr = mido.MidiTrack()
+        last = 0
+        for t, msg in sorted(self.ev, key=lambda e: (e[0], e[1].type == "note_on")):
+            tr.append(msg.copy(time=t - last))
+            last = t
+        return tr
 
 
-def add(start_s, sig, pan):
-    """Adds a mono signal at start_s seconds, panned (0 left .. 1 right), wrapping around (the track loops)."""
-    i0 = int(round(start_s * SR))
-    idx = (i0 + np.arange(len(sig))) % N
-    np.add.at(L, idx, sig * np.cos(pan * np.pi / 2))
-    np.add.at(R, idx, sig * np.sin(pan * np.pi / 2))
+piano = Track(0, 0, 92)        # Acoustic Grand Piano
+violin = Track(1, 40, 78)      # Violin
+cello = Track(2, 42, 84)       # Cello
+strings = Track(3, 49, 40)     # Slow strings, barely there
+tick = Track(9, 0, 34)         # percussion channel: wood blocks as a soft clock
 
+bar_ticks = 4 * TPB
+sec_of = ["intro"] * 4 + ["A"] * 8 + ["B"] * 8 + ["A2"] * 4 + ["outro"] * 4
+for b, name in enumerate(BARS):
+    bass, tones = CH[name]
+    t0 = b * bar_ticks
+    sec = sec_of[b]
+    soft = 0.8 if sec in ("intro", "outro") else 1.0
+    # piano right hand: a gentle wave over the chord in eighths
+    wave_ = [tones[0], tones[1], tones[2], tones[0] + 12, tones[2], tones[1], tones[0], tones[1]]
+    for i, m in enumerate(wave_):
+        accent = 1.12 if i in (0, 4) else 1.0
+        piano.note(t0 + i * TPB // 2, 0.9, m, (44 + rng.integers(-4, 5)) * accent * soft)
+    # piano left hand: low octave, then the fifth
+    piano.note(t0, 2, bass + 12, 50 * soft)
+    piano.note(t0, 2, bass + 24, 40 * soft)
+    piano.note(t0 + 2 * TPB, 2, bass + 19, 38 * soft)
+    # sustain pedal per bar (lift just before the next chord)
+    piano.cc(t0 + 10, 64, 100)
+    piano.cc(t0 + bar_ticks - 30, 64, 0)
+    # cello holds the bass from the third bar on (rests in the last bar so the loop breathes)
+    if 2 <= b < len(BARS) - 1:
+        cello.note(t0, 4, bass + 12 if bass < 40 else bass, 62)
+        cello.swell(t0, 4, 55, 92)
+    # warm string bed under A and B
+    if sec in ("A", "B", "A2"):
+        for m in tones:
+            strings.note(t0, 4, m - 12, 40)
+    # soft clock in the middle section
+    if sec == "B":
+        for q in range(4):
+            tick.note(t0 + q * TPB, 0.2, 76 if q % 2 == 0 else 77, 30)
 
-def piano(midi, held, vel):
-    """Soft piano note: held = seconds the key is down (the sustain pedal lets it ring a little longer)."""
-    f = hz(midi)
-    tail = 2.8
-    n = int((held + tail) * SR)
-    t = np.arange(n) / SR
-    out = np.zeros(n)
-    inharm = 0.00035
-    pitch_decay = (f / 261.6) ** 0.35
-    for k in range(1, 14):
-        fk = k * f * np.sqrt(1 + inharm * k * k)
-        if fk > 9000:
-            break
-        amp = (1 / k ** 1.35) * np.exp(-(k - 1) * (0.55 - 0.35 * vel))
-        fast = (1.8 + 0.9 * k) * pitch_decay
-        slow = (0.25 + 0.12 * k) * pitch_decay
-        env = 0.55 * np.exp(-fast * t) + 0.45 * np.exp(-slow * t)
-        out += amp * env * np.sin(2 * np.pi * fk * t + rng.uniform(0, 2 * np.pi))
-    out *= 1 - np.exp(-t * 500)                                    # felt hammer: no click
-    rel = np.clip((t - held - 0.6) / 1.6, 0, 1)                    # pedal up: a gentle release
-    out *= 1 - rel ** 0.7
-    thump = rng.standard_normal(int(0.012 * SR)) * np.exp(-np.arange(int(0.012 * SR)) / SR * 300) * 0.01 * vel
-    out[:len(thump)] += np.convolve(thump, np.ones(20) / 20, mode="same")
-    return out * vel
-
-
-def music_box(midi, vel):
-    f = hz(midi)
-    n = int(2.5 * SR)
-    t = np.arange(n) / SR
-    s = np.sin(2 * np.pi * f * t) + 0.25 * np.sin(2 * np.pi * f * 4.02 * t) * np.exp(-t * 6)
-    return s * np.exp(-t * 2.2) * (1 - np.exp(-t * 800)) * vel
-
-
-def pad(notes, dur):
-    n = int((dur + 2.0) * SR)
-    t = np.arange(n) / SR
-    s = np.zeros(n)
-    for m in notes:
-        for det in (-0.06, 0.06):
-            ph = 2 * np.pi * hz(m + det) * t
-            s += np.sin(ph) + 0.2 * np.sin(2 * ph)
-    env = np.clip(t / 1.8, 0, 1) * np.clip((dur + 2.0 - t) / 2.0, 0, 1)
-    return s * env
-
-
-for sec in range(SECTIONS):
-    for b, (root, tones) in enumerate(CHORDS):
-        t0 = (sec * len(CHORDS) + b) * BAR
-        # left hand: root, fifth-ish, chord tones rolling up and back down, in eighths (softer the second time)
-        pattern = [root, root + 7, tones[0], tones[1], tones[2], tones[1], tones[0], root + 7]
-        for i, m in enumerate(pattern):
-            if sec == 1 and i % 2 == 1 and b < 4:
-                continue  # the second time starts sparser
-            vel = (0.42 if i == 0 else 0.26) * (0.85 if sec == 1 else 1) * (0.92 + 0.16 * rng.random())
-            add(t0 + i * BEAT / 2 + rng.normal(0, 0.006), piano(m, BEAT * 1.5, vel), 0.38 + 0.0 * i)
-        # right hand melody
+# violin melody
+def play(bars, first_bar, octave=0, vel=70):
+    for k, bar in enumerate(bars):
         pos = 0.0
-        for m, beats in MELODY[b]:
-            if m is not None:
-                mm = m + (12 if sec == 1 and b >= 4 else 0)
-                vel = 0.5 if sec == 0 else 0.42
-                add(t0 + pos * BEAT + rng.normal(0, 0.008), piano(mm, beats * BEAT, vel), 0.62)
-                if sec == 1 and b >= 4 and pos == 0:
-                    add(t0 + pos * BEAT, music_box(mm + 12, 0.10), 0.75)
+        t0 = (first_bar + k) * bar_ticks
+        for m, beats in bar:
+            start = t0 + int(pos * TPB)
+            violin.note(start, beats, m + octave, vel)
+            violin.swell(start, beats, 52, 104)
             pos += beats
-        # strings, barely there
-        add(t0 - 0.6, pad([root + 12] + tones, BAR) * 0.010, 0.5)
 
-# room: 3.2 s of decaying, darkened stereo noise, applied by circular (seamless) convolution
-ir_n = int(3.2 * SR)
-t_ir = np.arange(ir_n) / SR
-wet = []
-for ch in (L, R):
-    noise = rng.standard_normal(ir_n) * np.exp(-t_ir * 1.9)
-    noise = np.convolve(noise, np.ones(16) / 16, mode="same")
-    ir = np.zeros(N)
-    ir[int(0.018 * SR):int(0.018 * SR) + ir_n] = noise[:N - int(0.018 * SR)]
-    wet.append(np.fft.irfft(np.fft.rfft(ch) * np.fft.rfft(ir), N))
-g = np.sqrt((np.mean(L ** 2) + np.mean(R ** 2)) / max(np.mean(wet[0] ** 2) + np.mean(wet[1] ** 2), 1e-12))
-outL = L * 0.75 + wet[0] * g * 0.5
-outR = R * 0.75 + wet[1] * g * 0.5
+play(MEL_A, 4)
+play(MEL_B, 12, vel=74)
+play(MEL_A2, 20, vel=66)
 
-out = np.stack([outL, outR], axis=1)
-out *= 0.55 / np.max(np.abs(out))
-pcm = (out * 32767).astype("<i2")
-path = sys.argv[1] if len(sys.argv) > 1 else "menu_theme.wav"
-with wave.open(path, "wb") as w:
+mid = mido.MidiFile(ticks_per_beat=TPB)
+meta = mido.MidiTrack()
+meta.append(mido.MetaMessage("set_tempo", tempo=mido.bpm2tempo(BPM), time=0))
+mid.tracks.append(meta)
+for tr in (piano, violin, cello, strings, tick):
+    mid.tracks.append(tr.midi_track())
+
+out_path = Path(sys.argv[1] if len(sys.argv) > 1 else "menu_theme.wav")
+loop_s = len(BARS) * 4 * 60 / BPM
+with tempfile.TemporaryDirectory() as tmp:
+    midp, rawp = Path(tmp) / "theme.mid", Path(tmp) / "render.wav"
+    # an empty bar at the end lets the reverb and the last notes ring out; that tail is folded onto the start
+    tail = mido.MidiTrack()
+    tail.append(mido.MetaMessage("end_of_track", time=len(BARS) * bar_ticks + 3 * bar_ticks))
+    mid.tracks.append(tail)
+    mid.save(midp)
+    subprocess.run(["fluidsynth", "-ni", "-q", "-g", "0.5", "-r", str(SR),
+                    "-o", "synth.reverb.active=1", "-o", "synth.reverb.room-size=0.82", "-o", "synth.reverb.damp=0.35",
+                    "-o", "synth.reverb.width=0.9", "-o", "synth.reverb.level=0.75", "-o", "synth.chorus.active=0",
+                    "-F", str(rawp), SF2, str(midp)], check=True)
+    with wave.open(str(rawp)) as w:
+        ch = w.getnchannels()
+        data = np.frombuffer(w.readframes(w.getnframes()), "<i2").astype(float).reshape(-1, ch)
+
+n = int(round(loop_s * SR))
+song = data[:n].copy()
+rest = data[n:]
+song[:len(rest)] += rest[:n]                        # seamless loop: what rings past the end sounds at the start
+song *= 0.5 * 32767 / np.max(np.abs(song))
+with wave.open(str(out_path), "wb") as w:
     w.setnchannels(2)
     w.setsampwidth(2)
     w.setframerate(SR)
-    w.writeframes(pcm.tobytes())
-print(f"{path}: {N / SR:.0f} s")
+    w.writeframes(song.astype("<i2").tobytes())
+print(f"{out_path}: {n / SR:.0f} s")

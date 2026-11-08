@@ -148,8 +148,8 @@ jobs:
           OPENACE_E2E_PLACE=1 nohup ./run.sh nogui > server.log 2>&1 &  # the second player to join is put in front of the first
           for i in $(seq 1 180); do
             if grep -q 'Done (' server.log; then echo "server is up"; exit 0; fi
-            if [ -d crash-reports ] || ! pgrep -f 'neoforge' > /dev/null; then echo "::error::server crashed or exited while starting"; tail -80 server.log; exit 1; fi
-            sleep 2
+            sleep 2  # first wait, then check: right after the start the Java process may not be visible yet
+            if [ -d crash-reports ] || { [ $i -gt 3 ] && ! pgrep -f 'neoforge' > /dev/null; }; then echo "::error::server crashed or exited while starting"; tail -80 server.log; exit 1; fi
           done
           echo "::error::server did not start in 6 minutes"; tail -80 server.log; exit 1
       # Two real game clients: "Observer" joins first and waits; "Waker" joins later, is put in front of the
