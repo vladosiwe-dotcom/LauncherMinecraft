@@ -170,15 +170,28 @@ public final class RiftTransition {
         if (RiftScene.INSTANCE.travelling() && mc.screen == null && mc.level != null) RiftScene.INSTANCE.beginArrival();
     }
 
-    /** Over the world: the tunnel's light grows to white, then the white fades and the world shows through. */
+    /**
+     * Over the world: the tunnel rushes on and its light grows to white, holds a breath, then slowly melts away
+     * (ease-out, warming as it goes). The world (or, on a first entry with Solo Status, the closed eyes of the
+     * awakening) shows through it, so there is no cut between the rift and what comes after.
+     */
     private static void renderArrival(GuiGraphics g, DeltaTracker delta) {
         RiftScene scene = RiftScene.INSTANCE;
         if (scene.phase != RiftScene.Phase.ARRIVED) return;
         int w = g.guiWidth(), h = g.guiHeight();
         scene.frame();
         float t = scene.phaseT;
-        if (t < 0.45f) scene.renderTunnel(g, w, h, 1);
-        float white = t < 0.45f ? ease((t - 0.2f) / 0.25f) : 1 - ease((t - 0.45f) / 0.9f);
-        if (white > 0.002f) g.fill(0, 0, w, h, argb(0xFFFFFF, white));
+        if (t < 0.5f) scene.renderTunnel(g, w, h, 1);
+        float white;
+        if (t < 0.5f) white = ease((t - 0.2f) / 0.3f);
+        else if (t < 0.75f) white = 1;
+        else {
+            float k = Math.min(1, (t - 0.75f) / 1.3f);
+            white = (1 - k) * (1 - k) * (1 - k); // ease-out: fast at first, then lingering
+        }
+        if (white > 0.002f) {
+            int warm = Math.round(255 - 20 * (1 - white)); // the last of the light is a little warm, like daylight
+            g.fill(0, 0, w, h, argb(0xFF0000 | (warm << 8) | Math.max(0, warm - 25), white));
+        }
     }
 }

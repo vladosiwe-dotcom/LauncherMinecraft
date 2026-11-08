@@ -188,7 +188,7 @@ jobs:
           for p in sorted(glob.glob('rift/client-mod/run/screenshots/*.png')):
               im = Image.open(p).convert('RGB'); im.thumbnail((640, 360)); im.save('/tmp/frames/' + p.rsplit('/', 1)[-1])
           "
-          grep -E "Awakening:|E2E:" rift/client-mod/client.log > /tmp/frames/log.txt || true
+          grep -E "Awakening:|E2E:|Epic Fight:" rift/client-mod/client.log > /tmp/frames/log.txt || true
           cp rift/client-mod/run/config/epicfight*.toml /tmp/frames/ 2>/dev/null || true
           jar=$(ls mods-client/*epic*fight*.jar 2>/dev/null | head -1)
           if [ -n "$jar" ]; then

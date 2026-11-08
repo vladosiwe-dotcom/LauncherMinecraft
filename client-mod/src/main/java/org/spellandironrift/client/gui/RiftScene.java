@@ -126,7 +126,7 @@ public final class RiftScene {
             case TUNNEL -> { tunnelA = 1; cam = 1; }
             case ARRIVED -> {
                 tunnelExit = ease(phaseT / 0.45f);
-                if (phaseT >= 1.4f) { phase = Phase.MENU; cam = 0; tunnelA = 0; boost = 0; tunnelExit = 0; }
+                if (phaseT >= 2.1f) { phase = Phase.MENU; cam = 0; tunnelA = 0; boost = 0; tunnelExit = 0; }
             }
             case BACK -> {
                 tunnelA = 1 - ease(phaseT / 0.6f);
