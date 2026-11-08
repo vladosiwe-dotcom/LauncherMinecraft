@@ -136,7 +136,7 @@ jobs:
       - name: Start the server
         run: |
           cd server
-          nohup ./run.sh nogui > server.log 2>&1 &
+          SOLO_E2E_BOT=1 nohup ./run.sh nogui > server.log 2>&1 &  # a second player wakes up in front of the client
           for i in $(seq 1 180); do
             if grep -q 'Done (' server.log; then echo "server is up"; exit 0; fi
             if [ -d crash-reports ] || ! pgrep -f 'neoforge' > /dev/null; then echo "::error::server crashed or exited while starting"; tail -80 server.log; exit 1; fi
@@ -189,6 +189,7 @@ jobs:
               im = Image.open(p).convert('RGB'); im.thumbnail((640, 360)); im.save('/tmp/frames/' + p.rsplit('/', 1)[-1])
           "
           grep -E "Awakening:|E2E:|Epic Fight:" rift/client-mod/client.log > /tmp/frames/log.txt || true
+          grep -E "Awakening e2e|Hunter_Bot|Exception" server/server.log | head -40 > /tmp/frames/server-log.txt || true
           cp rift/client-mod/run/config/epicfight*.toml /tmp/frames/ 2>/dev/null || true
           jar=$(ls mods-client/*epic*fight*.jar 2>/dev/null | head -1)
           if [ -n "$jar" ]; then
@@ -203,6 +204,12 @@ jobs:
             ffmpeg -loglevel error -y -framerate 20 -i rift/client-mod/run/screenshots/awakening-v-%03d.png \
               -vf "scale=960:-2" -c:v libx264 -pix_fmt yuv420p -movflags +faststart /tmp/frames/awakening.mp4
             rm -f /tmp/frames/awakening-v-*.png
+          fi
+          # what the client saw of another player's awakening (the multiplayer view)
+          if ls rift/client-mod/run/screenshots/awakening-o-*.png > /dev/null 2>&1; then
+            ffmpeg -loglevel error -y -framerate 20 -i rift/client-mod/run/screenshots/awakening-o-%03d.png \
+              -vf "scale=960:-2" -c:v libx264 -pix_fmt yuv420p -movflags +faststart /tmp/frames/awakening-other.mp4
+            rm -f /tmp/frames/awakening-o-*.png
             ls -la /tmp/frames/awakening.mp4
           fi
           cd /tmp/frames && git init -q && git checkout -q -b e2e-frames && git add .
