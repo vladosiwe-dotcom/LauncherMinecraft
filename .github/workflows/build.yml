@@ -38,3 +38,36 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  launcher-installers:
+    needs: launcher-and-backend
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+            files: launcher/release/*.exe
+          - os: ubuntu-latest
+            target: --linux
+            files: launcher/release/*.AppImage
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Package the launcher
+        working-directory: launcher
+        run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-${{ matrix.os }}
+          path: ${{ matrix.files }}
+          if-no-files-found: error

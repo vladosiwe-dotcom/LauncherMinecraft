@@ -44,7 +44,19 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "assets/icon.png"
-    }
+      "icon": "assets/icon.png",
+      "category": "Game",
+      "artifactName": "Spell-and-Iron-Rift-${version}.${ext}"
+    },
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Spell-and-Iron-Rift-Setup-${version}.${ext}"
+    },
+    "publish": null
   }
 }
