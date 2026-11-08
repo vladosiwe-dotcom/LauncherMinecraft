@@ -50,7 +50,7 @@
   const NAV = [
     ['nav.g.server', [['overview', 'server.view'], ['console', 'server.view'], ['players', 'server.view']]],
     ['nav.g.content', [['library', 'server.view'], ['builds', 'server.view'], ['launcher', 'server.view']]],
-    ['nav.g.community', [['news', 'news.manage'], ['site', 'server.view']]],
+    ['nav.g.community', [['accounts', 'accounts.view'], ['news', 'news.manage'], ['site', 'server.view']]],
     ['nav.g.system', [['backups', 'backups.manage'], ['users', 'users.manage'], ['audit', 'audit.view']]],
   ];
   function renderShell() {
@@ -317,6 +317,50 @@
     });
     $('#lrUnpublish')?.addEventListener('click', () => dialog(`<h3>${t('lr.unpublish')}?</h3><p>${t('lr.unpublishText')}</p>`, async () => { await api('POST', '/launcher/unpublish'); toast(t('saved')); render(); }, t('lr.unpublish'), true));
     $$('[data-lrp]').forEach((b) => { b.onclick = () => dialog(`<h3>${t('lr.republish')}?</h3>`, async () => { await api('POST', `/launcher/${b.dataset.lrp}/publish`); toast(t('lr.done')); render(); }, t('lr.republish')); });
+  };
+
+  // Player accounts (nickname + password accounts of the project, linked to Minecraft profiles)
+  S.accQuery = S.accQuery ?? '';
+  VIEWS.accounts = async (c) => {
+    const list = (await api('GET', '/accounts')).sort((a, b) => a.nick.localeCompare(b.nick));
+    const manage = can('accounts.manage'), moderate = can('accounts.moderate');
+    const q = S.accQuery.toLowerCase();
+    const shown = list.filter((a) => !q || a.nick.toLowerCase().includes(q) || (a.minecraft?.name ?? '').toLowerCase().includes(q));
+    let keyBlock = '';
+    if (can('users.manage')) {
+      const k = await api('GET', '/accounts-server-key').catch(() => null);
+      if (k) keyBlock = `<section class="panel"><div class="panel__head"><h2>${t('acc.key')}</h2></div><div class="panel__body"><p class="muted">${t('acc.key.help')}</p><p><button type="button" class="btn btn--sm" id="accKeyShow">${t('acc.key.show')}</button> <code class="mono" id="accKey" hidden>${esc(k.key)}</code></p></div></section>`;
+    }
+    c.innerHTML = `
+      <section class="panel">
+        <div class="panel__head"><h2>${t('nav.accounts')} <span class="muted">${list.length}</span></h2><span class="spacer"></span>
+          <label class="field" style="margin:0;max-width:260px"><input id="accSearch" placeholder="${t('acc.search')}" value="${esc(S.accQuery)}"></label></div>
+        ${shown.length ? `<div class="table-wrap"><table><thead><tr><th>${t('acc.nick')}</th><th>${t('acc.role')}</th><th>${t('acc.minecraft')}</th><th>${t('acc.status')}</th><th>${t('acc.created')}</th><th></th></tr></thead><tbody>
+          ${shown.map((a) => `<tr>
+            <td><b>${esc(a.nick)}</b><span class="sub mono" title="${esc(a.id)}">${esc(a.id.slice(0, 8))}…</span></td>
+            <td>${manage ? `<select data-role="${a.id}">${['player', 'moderator', 'admin'].map((r) => `<option value="${r}" ${a.role === r ? 'selected' : ''}>${t(`acc.role.${r}`)}</option>`).join('')}</select>` : t(`acc.role.${a.role}`)}</td>
+            <td>${a.minecraft ? `${esc(a.minecraft.name)}<span class="sub mono" title="${esc(a.minecraft.uuid)}">${esc(a.minecraft.uuid.slice(0, 8))}…</span>` : `<span class="muted">${t('acc.notLinked')}</span>`}</td>
+            <td>${a.status === 'banned' ? `<span class="chip" data-k="error">${t('acc.banned')}</span><span class="sub">${esc(a.banReason || '')}</span>` : `<span class="chip" data-k="published">${t('acc.active')}</span>`}${a.mustChangePassword ? `<span class="sub">${t('acc.mustChange')}</span>` : ''}</td>
+            <td>${fmtDate(a.createdAt)}<span class="sub">${a.lastLoginAt ? fmtDate(a.lastLoginAt) : ''}</span></td>
+            <td class="actions">
+              ${moderate ? (a.status === 'banned' ? `<button type="button" class="btn btn--sm" data-unban="${a.id}">${t('acc.unban')}</button>` : `<button type="button" class="btn btn--sm btn--danger" data-ban="${a.id}" data-nick="${esc(a.nick)}">${t('acc.ban')}</button>`) : ''}
+              ${manage ? `<button type="button" class="btn btn--sm btn--ghost" data-reset="${a.id}" data-nick="${esc(a.nick)}">${t('acc.reset')}</button><button type="button" class="btn btn--sm btn--ghost" data-delacc="${a.id}" data-nick="${esc(a.nick)}">${t('acc.delete')}</button>` : ''}
+            </td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="empty">${t('acc.empty')}</div>`}
+      </section>${keyBlock}`;
+    const search = $('#accSearch');
+    search.oninput = () => { S.accQuery = search.value; clearTimeout(S.accT); S.accT = setTimeout(async () => { await render(); const el = $('#accSearch'); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }, 250); };
+    $('#accKeyShow')?.addEventListener('click', () => { $('#accKey').hidden = false; $('#accKeyShow').hidden = true; });
+    $$('[data-role]').forEach((sel) => { sel.onchange = guard(async () => { await api('POST', `/accounts/${sel.dataset.role}/role`, { role: sel.value }); toast(t('saved')); render(); }); });
+    $$('[data-ban]').forEach((b) => { b.onclick = () => dialog(`<h3>${t('acc.ban')}: ${esc(b.dataset.nick)}</h3><label class="field"><span>${t('acc.banReason')}</span><input id="dBanReason" maxlength="300"></label><p class="muted">${t('acc.banHelp')}</p>`,
+      async (box) => { await api('POST', `/accounts/${b.dataset.ban}/ban`, { reason: $('#dBanReason', box).value.trim() }); toast(t('saved')); render(); }, t('acc.ban'), true); });
+    $$('[data-unban]').forEach((b) => { b.onclick = guard(async () => { await api('POST', `/accounts/${b.dataset.unban}/unban`); toast(t('saved')); render(); }); });
+    $$('[data-reset]').forEach((b) => { b.onclick = () => dialog(`<h3>${t('acc.reset')}: ${esc(b.dataset.nick)}</h3><p>${t('acc.resetHelp')}</p>`, async () => {
+      const r = await api('POST', `/accounts/${b.dataset.reset}/reset-password`);
+      dialog(`<h3>${t('acc.tempTitle')}</h3><p>${t('acc.tempHelp', { nick: esc(b.dataset.nick) })}</p><p><code class="mono" style="font-size:18px;user-select:all">${esc(r.temporaryPassword)}</code></p>`, async () => {}, t('close'));
+      render();
+    }, t('acc.reset')); });
+    $$('[data-delacc]').forEach((b) => { b.onclick = () => dialog(`<h3>${t('acc.delete')}: ${esc(b.dataset.nick)}?</h3><p>${t('acc.deleteHelp')}</p>`, async () => { await api('DELETE', `/accounts/${b.dataset.delacc}`); toast(t('deleted')); render(); }, t('acc.delete'), true); });
   };
 
   VIEWS.builds = async (c) => {

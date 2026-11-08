@@ -92,7 +92,7 @@
   setInterval(() => { if (db.state === 'running') push(`[Server thread/INFO] [minecraft/MinecraftServer]: ${chatter[Math.floor(Math.random() * chatter.length)]}`); }, 3500);
 
   const routes = [
-    ['GET', /^\/me$/, () => ({ user: db.users[0], csrf: 'demo', permissions: ['server.view', 'server.control', 'console.command', 'players.moderate', 'content.manage', 'builds.manage', 'builds.publish', 'news.manage', 'site.manage', 'backups.manage', 'backups.restore', 'users.manage', 'audit.view'], serverConfigured: true, keyId: 'demo' })],
+    ['GET', /^\/me$/, () => ({ user: db.users[0], csrf: 'demo', permissions: ['server.view', 'server.control', 'console.command', 'players.moderate', 'content.manage', 'builds.manage', 'builds.publish', 'news.manage', 'site.manage', 'backups.manage', 'backups.restore', 'users.manage', 'audit.view', 'accounts.view', 'accounts.moderate', 'accounts.manage'], serverConfigured: true, keyId: 'demo' })],
     ['POST', /^\/login$/, (b) => { if (b.username !== 'owner') throw err(401, 'invalid_credentials'); return routes[0][2](); }],
     ['POST', /^\/logout$/, () => ({ ok: true })],
     ['GET', /^\/overview$/, () => {
@@ -122,6 +122,17 @@
     ['POST', /^\/launcher$/, (b) => { db.launcher ??= { releases: [], published: null }; if (!/^\d+\.\d+\.\d+$/.test(b.version)) throw err(400, 'bad_version'); const files = Object.fromEntries(Object.entries(b.files).filter(([, v]) => v)); if (!Object.keys(files).length) throw err(400, 'launcher_no_files'); const r = { id: `l${Date.now()}`, version: b.version, notes: b.notes, files, createdAt: new Date().toISOString(), publishedAt: new Date().toISOString(), createdBy: 'owner' }; db.launcher.releases.push(r); db.launcher.published = r.id; audit('launcher.publish', r.version); return r; }],
     ['POST', /^\/launcher\/unpublish$/, () => { db.launcher.published = null; }],
     ['POST', /^\/launcher\/([^/]+)\/publish$/, (_b, m) => { db.launcher.published = m[1]; }],
+    ['GET', /^\/accounts$/, () => (db.accounts ??= [
+      { id: '6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f', nick: 'Rift_Hunter', role: 'admin', status: 'active', createdAt: new Date(Date.now() - 864e6).toISOString(), lastLoginAt: new Date().toISOString(), minecraft: { uuid: '0f4e2b0a-9f2c-4f7f-8b1d-2a3c4d5e6f70', name: 'Rift_Hunter' } },
+      { id: '1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d', nick: 'Ardent_Vex', role: 'moderator', status: 'active', createdAt: new Date(Date.now() - 432e6).toISOString(), minecraft: { uuid: 'aa4e2b0a-9f2c-4f7f-8b1d-2a3c4d5e6f71', name: 'ArdentVex' } },
+      { id: '9f8e7d6c-5b4a-4c3d-8e2f-1a0b9c8d7e6f', nick: 'Griefer_42', role: 'player', status: 'banned', banReason: 'гриферство на спавне', createdAt: new Date(Date.now() - 172e6).toISOString(), minecraft: null },
+    ])],
+    ['GET', /^\/accounts-server-key$/, () => ({ configured: true, key: 'demo-key-not-real' })],
+    ['POST', /^\/accounts\/([^/]+)\/role$/, (b, m) => { const a = db.accounts.find((x) => x.id === m[1]); a.role = b.role; return a; }],
+    ['POST', /^\/accounts\/([^/]+)\/ban$/, (b, m) => { const a = db.accounts.find((x) => x.id === m[1]); a.status = 'banned'; a.banReason = b.reason; return a; }],
+    ['POST', /^\/accounts\/([^/]+)\/unban$/, (_b, m) => { const a = db.accounts.find((x) => x.id === m[1]); a.status = 'active'; delete a.banReason; return a; }],
+    ['POST', /^\/accounts\/([^/]+)\/reset-password$/, (_b, m) => { const a = db.accounts.find((x) => x.id === m[1]); a.mustChangePassword = true; return { account: a, temporaryPassword: 'vT3k9-QpL2xR7mN4' }; }],
+    ['DELETE', /^\/accounts\/([^/]+)$/, (_b, m) => { db.accounts = db.accounts.filter((x) => x.id !== m[1]); }],
     ['GET', /^\/library$/, () => db.library],
     ['POST', /^\/library\/upload/, async (_b, _m, raw, path) => {
       const name = decodeURIComponent(/name=([^&]+)/.exec(path)[1]);
