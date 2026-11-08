@@ -46,6 +46,9 @@ export const PERMISSIONS = {
   'backups.restore': ['owner'],
   'users.manage': ['owner'],
   'audit.view': ['admin', 'owner'],
+  'accounts.view': ['moderator', 'admin', 'owner'],
+  'accounts.moderate': ['moderator', 'admin', 'owner'],
+  'accounts.manage': ['admin', 'owner'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 export const can = (role: Role, perm: Permission) => (PERMISSIONS[perm] as readonly Role[]).includes(role);

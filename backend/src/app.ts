@@ -5,6 +5,8 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Auth, COOKIE, hashPassword, passwordProblems, permissionsOf, requirePerm } from './auth.js';
 import { Backups } from './backups.js';
+import { Accounts, mojangHasJoined, type HasJoined } from './accounts.js';
+import { accountRouter, adminAccountRoutes, serverApiRouter } from './accountRoutes.js';
 import { Builds, analyzeBuild, syncServerFiles } from './builds.js';
 import type { Config } from './config.js';
 import type { Stores } from './db.js';
@@ -22,9 +24,9 @@ type Handler = (req: Request, res: Response) => Promise<unknown>;
 const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => fn(req, res).then((r) => { if (!res.headersSent) res.json(r ?? { ok: true }); }).catch(next);
 const httpError = (status: number, message: string, extra: object = {}) => Object.assign(new Error(message), { status, ...extra });
 
-export interface AppDeps { config: Config; db: Stores; keys: { privatePem: string; publicPem: string; keyId: string } }
+export interface AppDeps { config: Config; db: Stores; keys: { privatePem: string; publicPem: string; keyId: string }; serverKey?: string; hasJoined?: HasJoined }
 
-export function createApp({ config, db, keys }: AppDeps) {
+export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDeps) {
   const app = express();
   if (config.trustProxy) app.set('trust proxy', 1);
   app.disable('x-powered-by');
@@ -34,6 +36,7 @@ export function createApp({ config, db, keys }: AppDeps) {
   const proc = new ServerProcess(config.serverDir);
   const backups = new Backups(config.serverDir, join(config.dataDir, 'backups'), proc, config.backupKeep);
 
+  const accounts = new Accounts(db, hasJoined ?? mojangHasJoined(config.sessionServer));
   const audit = (user: User | undefined, action: string, detail?: string) =>
     db.audit.update((d) => { d.entries.unshift({ at: new Date().toISOString(), user: user?.username ?? 'system', action, detail }); d.entries.length = Math.min(d.entries.length, 5000); });
 
@@ -81,6 +84,10 @@ export function createApp({ config, db, keys }: AppDeps) {
     if (!existsSync(p)) return res.status(404).end();
     res.sendFile(p, { immutable: true, maxAge: '365d', headers: { 'Content-Type': 'application/octet-stream' } });
   });
+
+  // ---------------- player accounts (launcher) and the game server's guard ----------------
+  app.use('/api/account', accountRouter(accounts));
+  app.use('/api/server', serverApiRouter(accounts, serverKey));
 
   // ---------------- admin API ----------------
   const admin = express.Router();
@@ -349,6 +356,9 @@ export function createApp({ config, db, keys }: AppDeps) {
     await audit(me(res), 'launcher.unpublish');
   }));
 
+  adminAccountRoutes(admin, accounts, audit);
+  admin.get('/accounts-server-key', requirePerm('users.manage'), wrap(async () => ({ configured: !!serverKey, key: serverKey })));
+
   admin.get('/audit', requirePerm('audit.view'), wrap(async () => (await db.audit.read()).entries.slice(0, 500)));
   admin.get('/keys/public', requirePerm('builds.publish'), wrap(async () => ({ keyId: keys.keyId, publicPem: keys.publicPem })));
 
@@ -365,10 +375,10 @@ export function createApp({ config, db, keys }: AppDeps) {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = Number(err.status) || (/^(not_running|already_running|server_dir_not_configured|eula_not_accepted|server_must_be_stopped|world_not_found)$/.test(err.message) ? 409 : 500);
     if (status >= 500) console.error(err);
-    res.status(status).json({ error: status >= 500 ? 'internal_error' : err.message, ...(err.issues ? { issues: err.issues } : {}), ...(err.details ? { details: err.details } : {}) });
+    res.status(status).json({ error: status >= 500 ? 'internal_error' : err.message, ...(err.issues ? { issues: err.issues } : {}), ...(err.details ? { details: err.details } : {}), ...(typeof err.reason === 'string' ? { reason: err.reason } : {}) });
   });
 
-  return { app, proc, builds, library, backups, auth };
+  return { app, proc, builds, library, backups, auth, accounts };
 }
 
 function publicUser(u: User) { return { id: u.id, username: u.username, role: u.role, createdAt: u.createdAt, lastLoginAt: u.lastLoginAt, disabled: !!u.disabled }; }

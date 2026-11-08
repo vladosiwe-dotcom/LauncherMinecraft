@@ -13,6 +13,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
+    "@node-rs/argon2": "2.0.2",
     "@sir/shared": "0.1.0",
     "adm-zip": "^0.5.16",
     "express": "^4.21.2"

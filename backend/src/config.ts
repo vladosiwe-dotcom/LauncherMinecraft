@@ -15,6 +15,8 @@ export interface Config {
   cookieSecure: boolean;
   trustProxy: boolean;
   backupKeep: number;
+  /** Mojang session server (account linking); overridable for tests. */
+  sessionServer: string;
 }
 
 export function loadConfig(env = process.env): Config {
@@ -31,5 +33,6 @@ export function loadConfig(env = process.env): Config {
     cookieSecure: (env.RIFT_COOKIE_SECURE ?? (publicBaseUrl.startsWith('https://') ? '1' : '0')) === '1',
     trustProxy: env.RIFT_TRUST_PROXY === '1',
     backupKeep: Number(env.RIFT_BACKUP_KEEP ?? 14),
+    sessionServer: (env.RIFT_SESSION_SERVER ?? 'https://sessionserver.mojang.com').replace(/\/$/, ''),
   };
 }

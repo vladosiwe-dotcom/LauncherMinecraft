@@ -80,7 +80,7 @@ before(async () => {
     s.end(Buffer.concat([v(body.length), body]));
   }));
   await new Promise((r) => mcServer.listen(0, '127.0.0.1', r));
-  const { app } = createApp({ config: { port: 0, host: '127.0.0.1', dataDir: join(data, 'data'), serverDir, publicBaseUrl: 'http://localhost:1', mcHost: 'play.test', mcPort: mcServer.address().port, statusHost: '127.0.0.1', cookieSecure: false, trustProxy: false, backupKeep: 3 }, db, keys });
+  const { app } = createApp({ config: { port: 0, host: '127.0.0.1', dataDir: join(data, 'data'), serverDir, publicBaseUrl: 'http://localhost:1', mcHost: 'play.test', mcPort: mcServer.address().port, statusHost: '127.0.0.1', cookieSecure: false, trustProxy: false, backupKeep: 3, sessionServer: '' }, db, keys });
   srv = app.listen(0, '127.0.0.1');
   await new Promise((r) => srv.once('listening', r));
   base = `http://127.0.0.1:${srv.address().port}`;
