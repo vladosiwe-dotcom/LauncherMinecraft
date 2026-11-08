@@ -24,6 +24,7 @@
   --chamfer: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body { overflow: hidden; background: var(--ink); color: var(--text); font-family: var(--body); user-select: none; -webkit-user-select: none; }
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -125,15 +126,27 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .sealed .ring { opacity: .25; }
 @keyframes spin { from { transform: rotateX(76deg) rotateZ(0); } to { transform: rotateX(76deg) rotateZ(360deg); } }
 
-/* ---------- connecting ---------- */
-.connect { position: absolute; left: 50%; top: 292px; width: 260px; margin-left: -130px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 4px; opacity: 0; pointer-events: none; transition: opacity .5s .2s; }
-.connecting .connect { opacity: 1; pointer-events: auto; }
-.connect b { font: 700 12px var(--display); letter-spacing: .12em; color: var(--gold-hi); text-transform: uppercase; }
-.connect span { font: 400 6px var(--body); color: var(--dim); }
-.connect button { margin-top: 5px; border: 0; padding: 4px 14px; cursor: pointer; clip-path: var(--chamfer); background: rgba(35,33,44,.9); color: var(--dim); font: 500 6px var(--body); letter-spacing: .16em; text-transform: uppercase; }
-.connect button:hover, .connect button:focus-visible { color: var(--gold-hi); background: rgba(60,44,100,.9); outline: none; }
+/* ---------- flight through the rift (replaces the loading screen) ---------- */
+#world { transform-origin: 0 0; }
+#tunnel { opacity: 0; pointer-events: none; }
+.thud { position: absolute; left: 50%; bottom: calc(26px * var(--s, 1) + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: calc(5px * var(--s, 1)); text-align: center; animation: rise .6s ease both; }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } }
+.thud::before { content: ''; position: absolute; left: -40%; right: -40%; top: -60%; bottom: -60%; z-index: -1; background: radial-gradient(closest-side, rgba(5,3,11,.75), transparent); }
+.thud b { font: 700 calc(11px * var(--s, 1)) var(--display); letter-spacing: .16em; text-transform: uppercase; color: var(--gold-hi); text-shadow: 0 0 10px rgba(154,107,255,.8); }
+.steps { display: flex; gap: calc(6px * var(--s, 1)); }
+.steps i { width: calc(14px * var(--s, 1)); height: calc(1.5px * var(--s, 1)); background: rgba(235,230,243,.18); transition: background .3s, box-shadow .3s; }
+.steps i.done { background: var(--gold); }
+.steps i.now { background: var(--arcane); box-shadow: 0 0 6px var(--arcane); }
+.thud button { border: 0; background: none; cursor: pointer; padding: 2px 6px; color: var(--faint); font: 500 calc(6px * var(--s, 1)) var(--body); letter-spacing: .16em; text-transform: uppercase; }
+.thud button:hover, .thud button:focus-visible { color: var(--gold-hi); outline: none; }
 
-#flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 45%, #f6f1ff 0%, #b79bff 45%, #2a1660 100%); }
+#flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(ellipse at 50% 50%, #ffffff 0%, #f1ebff 55%, #cdb9ff 100%); }
+.arrive { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(420px, calc(100% - 32px)); padding: 18px 20px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  background: rgba(13,12,18,.88); border: 1px solid var(--gold-lo); }
+.arrive b { font: 700 22px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--gold-hi); }
+.arrive span { font: 400 14px/1.5 var(--body); color: var(--dim); }
+.arrive button { margin-top: 6px; border: 1px solid var(--gold-lo); background: rgba(43,31,72,.6); color: var(--gold-hi); padding: 7px 16px; cursor: pointer; font: 500 12px var(--body); letter-spacing: .12em; text-transform: uppercase; }
+.arrive button:focus-visible { outline: 1px solid var(--gold); outline-offset: 2px; }
 
 /* ---------- mockup chrome (not part of the game screen) ---------- */
 .mock { position: absolute; top: calc(10px + env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; padding: 4px 4px 4px 10px;
@@ -141,7 +154,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 .mock button { font: 11px var(--mono); border: 0; padding: 3px 8px; background: transparent; color: #8c86a0; cursor: pointer; }
 .mock button[aria-pressed="true"] { background: #2b2440; color: var(--gold-hi); }
 .mock button:focus-visible { outline: 1px solid var(--gold); }
-.toast { position: absolute; left: 50%; bottom: calc(56px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); padding: 8px 14px; font: 13px var(--body); color: var(--gold-hi); background: rgba(13,12,18,.94); border: 1px solid var(--gold-lo); z-index: 6; max-width: calc(100% - 32px); text-align: center; }
+.toast { position: absolute; left: 50%; top: calc(48px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); padding: 8px 14px; font: 13px var(--body); color: var(--gold-hi); background: rgba(13,12,18,.94); border: 1px solid var(--gold-lo); z-index: 6; max-width: calc(100% - 32px); text-align: center; }
 .portrait-hint { display: none; position: absolute; left: 16px; right: 16px; bottom: calc(14px + env(safe-area-inset-bottom, 0px)); text-align: center; font: 12px var(--body); color: var(--faint); }
 @media (orientation: portrait) { .portrait-hint { display: block; } .mock span { display: none; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -205,17 +218,26 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 
   <div class="footer ui">Сборка 0.3.2 · NeoForge 1.21.1</div>
 
-  <div class="connect" aria-live="polite">
-    <b id="connStatus">Подключение к серверу</b>
-    <span id="connSub">play.spellandiron.net</span>
-    <button type="button" id="cancel">Отмена</button>
-  </div>
 </main>
 
+<canvas id="tunnel" aria-hidden="true"></canvas>
+<div class="thud" id="thud" aria-live="polite" hidden>
+  <b id="tStatus">Соединение</b>
+  <div class="steps" id="steps"><i></i><i></i><i></i><i></i></div>
+  <button type="button" id="cancel">Esc · Отмена</button>
+</div>
 <div id="flash" aria-hidden="true"></div>
+<div class="arrive" id="arrive" hidden>
+  <b>Вы в мире</b>
+  <span>В игре здесь белый свет рассеивается и вокруг проявляется мир сервера. На этом макет заканчивается.</span>
+  <button type="button" id="again">Вернуться в меню</button>
+</div>
 <div class="mock" role="group" aria-label="Управление макетом"><span>макет · сервер:</span>
   <button type="button" id="mOn" aria-pressed="true">онлайн</button>
   <button type="button" id="mOff" aria-pressed="false">недоступен</button>
+  <span>вход:</span>
+  <button type="button" id="rOk" aria-pressed="true">успешно</button>
+  <button type="button" id="rFail" aria-pressed="false">ошибка</button>
 </div>
 <div class="toast" id="toast" hidden></div>
 <div class="portrait-hint">Это экран игры 16:9. Поверните телефон, чтобы рассмотреть детали.</div>
@@ -224,7 +246,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
 (() => {
   const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const $ = (id) => document.getElementById(id);
-  const stage = $('stage'), world = $('world'), fx = $('fx'), wg = world.getContext('2d'), g = fx.getContext('2d');
+  const stage = $('stage'), world = $('world'), fx = $('fx'), wg = world.getContext('2d'), g = fx.getContext('2d'), tc = $('tunnel'), tg = tc.getContext('2d');
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v)), lerp = (a, b, t) => a + (b - a) * t;
   const ease = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
   const mix = (a, b, t) => a.map((v, i) => Math.round(lerp(v, b[i], t)));
@@ -243,7 +265,23 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
     stage.classList.toggle('narrow', W < 600);
     dpr = Math.min(2, devicePixelRatio || 1);
     fx.width = Math.round(vw * dpr); fx.height = Math.round(vh * dpr);
-    buildRift(); drawWorld();
+    tc.width = fx.width; tc.height = fx.height;
+    document.documentElement.style.setProperty('--s', S.toFixed(3));
+    buildRift(); drawWorld(); applyCamera();
+  }
+
+  // ---------- camera: dives into the widest part of the rift ----------
+  const FOCUS_Y = 116;
+  function camera() {
+    const p = st.cam, fxp = pts.length ? centreAt(0.35) : W / 2;
+    return { z: 1 + 13 * Math.pow(p, 2.4), fx: fxp, fy: FOCUS_Y, tx: lerp(fxp, W / 2, ease(p)), ty: lerp(FOCUS_Y, 180, ease(p)) };
+  }
+  function applyCamera() {
+    const c = camera();
+    stage.style.transform = `translate(${OX}px, ${OY}px) scale(${S}) translate(${c.tx}px, ${c.ty}px) scale(${c.z}) translate(${-c.fx}px, ${-c.fy}px)`;
+    // the backdrop is far away: it grows slower (parallax)
+    const zw = 1 + (c.z - 1) * 0.3, sx = OX + S * c.fx, sy = OY + S * c.fy;
+    world.style.transform = `translate(${S * (c.tx - c.fx)}px, ${S * (c.ty - c.fy)}px) translate(${sx}px, ${sy}px) scale(${zw}) translate(${-sx}px, ${-sy}px)`;
   }
 
   // ---------- backdrop: stand-in for the Rift panorama (in game: a resource-pack panorama) ----------
@@ -300,7 +338,8 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   function centreAt(t) { const f = clamp(t, 0, 1) * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)); return lerp(pts[i].x, pts[i + 1].x, f - i); }
 
   // state of the screen
-  const st = { server: 'checking', power: 0, pull: 0, enterT: -1, connecting: false, connT: 0, boost: 0, nextArc: 1.5, recheck: 10 };
+  // phase: menu → enter (turn, step in, camera dives) → tunnel (while connecting) → exit (light) → arrived; or → back (error / cancel)
+  const st = { server: 'checking', power: 0, pull: 0, phase: 'menu', enterT: 0, phaseT: 0, connT: 0, boost: 0, nextArc: 1.5, recheck: 10, cam: 0, why: '' };
   const C_SEALED = { v: [92, 88, 112], a: [118, 114, 134], c: [170, 166, 184] }, C_OPEN = { v: [154, 107, 255], a: [95, 200, 255], c: [240, 236, 255] };
 
   function drawRift(time, dt) {
@@ -310,7 +349,8 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
     const cv = mix(C_SEALED.v, C_OPEN.v, p), ca = mix(C_SEALED.a, C_OPEN.a, p), cc = mix(C_SEALED.c, C_OPEN.c, p);
     const cx = W / 2;
     g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, fx.width, fx.height);
-    g.setTransform(dpr * S, 0, 0, dpr * S, dpr * OX, dpr * OY);
+    const cm = camera();
+    g.setTransform(dpr * S * cm.z, 0, 0, dpr * S * cm.z, dpr * (OX + S * (cm.tx - cm.fx * cm.z)), dpr * (OY + S * (cm.ty - cm.fy * cm.z)));
     g.globalCompositeOperation = 'lighter';
     // ambient light thrown on the scene and the pool at the base
     let rg = g.createRadialGradient(cx, 150, 4, cx, 150, 230);
@@ -343,7 +383,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
     g.globalCompositeOperation = 'lighter';
     const edge = (pts2, width, color) => { g.beginPath(); g.moveTo(pts2[0][0], pts2[0][1]); for (const q of pts2) g.lineTo(q[0], q[1]); g.lineWidth = width; g.strokeStyle = color; g.stroke(); };
     g.lineJoin = 'bevel'; g.lineCap = 'round';
-    g.shadowColor = rgba(cv, 0.9 * I); g.shadowBlur = 26 * S * dpr;
+    g.shadowColor = rgba(cv, 0.9 * I); g.shadowBlur = Math.min(160, 26 * S * dpr * cm.z);
     poly(); g.fillStyle = rgba(cv, 0.1 * I); g.fill();
     edge(L, 5, rgba(cv, 0.22 * I)); edge(R, 5, rgba(cv, 0.22 * I));
     g.shadowBlur = 0;
@@ -449,7 +489,9 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
     bodyYaw += (clamp(yaw * 0.35, -25, 25) - bodyYaw) * k * 0.6;
     // entering: turn to the rift, walk into it
     let spin = 0, walk = 0;
-    if (st.enterT >= 0) { spin = 180 * ease(st.enterT / 0.32); walk = ease((st.enterT - 0.28) / 0.6); }
+    if (st.phase === 'enter') { spin = 180 * ease(st.enterT / 0.32); walk = ease((st.enterT - 0.28) / 0.6); }
+    else if (st.phase === 'back') { walk = 1 - ease((st.phaseT - 0.9) / 0.5); spin = 180 * (1 - ease((st.phaseT - 1.35) / 0.3)); } // steps back out
+    else if (st.phase !== 'menu') { spin = 180; walk = 1; }
     const breathe = reduce ? 0 : Math.sin(time * 2.1) * 0.012, sway = reduce ? 0 : Math.sin(time * 1.35);
     root.style.transform = `rotateY(${(spin ? 0 : bodyYaw) + spin}deg) scaleY(${1 + breathe})`;
     headInner.style.transform = spin ? 'none' : `rotateY(${yaw - bodyYaw}deg) rotateX(${-pitch}deg)`;
@@ -460,7 +502,7 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
     lLeg.style.transform = `translate3d(${2 * K}px, ${-12 * K}px, 0) rotateX(${-step}deg)`;
     const hero = $('hero');
     hero.style.transform = `translateY(${-walk * 10}px) scale(${1 - 0.5 * walk})`;
-    hero.style.opacity = st.connecting ? 0 : 1 - walk;
+    hero.style.opacity = 1 - walk;
   }
 
   // ---------- server state ----------
@@ -480,56 +522,146 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   }
   let demoOffline = false;
   function check() { setServer('checking'); setTimeout(() => { st.recheck = 10; setServer(demoOffline ? 'offline' : 'online'); }, 1100); }
-  $('mOn').onclick = () => { demoOffline = false; $('mOn').setAttribute('aria-pressed', 'true'); $('mOff').setAttribute('aria-pressed', 'false'); if (!st.connecting && st.enterT < 0) check(); };
-  $('mOff').onclick = () => { demoOffline = true; $('mOff').setAttribute('aria-pressed', 'true'); $('mOn').setAttribute('aria-pressed', 'false'); if (!st.connecting && st.enterT < 0) setServer('offline'); };
+  $('mOn').onclick = () => { demoOffline = false; press('mOn', 'mOff'); if (st.phase === 'menu') check(); };
+  $('mOff').onclick = () => { demoOffline = true; press('mOff', 'mOn'); if (st.phase === 'menu') setServer('offline'); };
+  let demoFail = false;
+  $('rOk').onclick = () => { demoFail = false; press('rOk', 'rFail'); };
+  $('rFail').onclick = () => { demoFail = true; press('rFail', 'rOk'); };
+  function press(on, off) { $(on).setAttribute('aria-pressed', 'true'); $(off).setAttribute('aria-pressed', 'false'); }
+
+  // ---------- flight through the rift: endless tunnel drawn while the game connects ----------
+  const T = { speed: 0, stars: [], rings: [], ringTimer: 0, exit: 0, grey: 0 };
+  function newStar(z) { const a = Math.random() * Math.PI * 2, r = 0.12 + Math.pow(Math.random(), 0.6) * 1.5; return { x: Math.cos(a) * r, y: Math.sin(a) * r, z, c: Math.random() < 0.6 ? 0 : Math.random() < 0.8 ? 1 : 2 }; }
+  function newRing(z) { const v = []; let k = 1; for (let i = 0; i < 30; i++) { k = clamp(k + (Math.random() - 0.5) * 0.16, 0.86, 1.16); v.push(i === 29 ? (k + v[0]) / 2 : k + (Math.random() < 0.2 ? 0.08 : 0)); } return { z, rot: Math.random() * 6.28, spin: (Math.random() - 0.5) * 0.5, v, rune: Math.random() < 0.28 }; }
+  function tunnelReset() { T.speed = 0.6; T.exit = 0; T.grey = 0; T.ringTimer = 0.5; T.stars = Array.from({ length: 300 }, () => newStar(0.06 + Math.random() * 4)); T.rings = []; for (let z = 0.7; z < 4; z += 0.6) T.rings.push(newRing(z)); }
+  function drawTunnel(time, dt, alpha) {
+    tc.style.opacity = alpha;
+    if (alpha <= 0.001) return;
+    const w = tc.width, h = tc.height, F = Math.min(w, h) * 0.5;
+    const target = st.phase === 'exit' ? 7 : st.phase === 'back' ? -0.8 : reduce ? 0.35 : 1.6;
+    T.speed += (target - T.speed) * Math.min(1, dt * 2.4);
+    T.grey += ((st.phase === 'back' ? 1 : 0) - T.grey) * Math.min(1, dt * 3);
+    const cv = mix(C_OPEN.v, C_SEALED.v, T.grey), ca = mix(C_OPEN.a, C_SEALED.a, T.grey), cc = mix(C_OPEN.c, C_SEALED.c, T.grey);
+    const vx = w / 2 + (reduce ? 0 : Math.sin(time * 0.6) * w * 0.03), vy = h / 2 + (reduce ? 0 : Math.cos(time * 0.45) * h * 0.025);
+    tg.globalCompositeOperation = 'source-over';
+    let rg = tg.createRadialGradient(vx, vy, 0, vx, vy, Math.max(w, h) * 0.75);
+    rg.addColorStop(0, rgba(mix([74, 32, 160], [44, 42, 54], T.grey), 1)); rg.addColorStop(0.35, rgba(mix([30, 12, 72], [22, 21, 28], T.grey), 1)); rg.addColorStop(1, '#05030b');
+    tg.fillStyle = rg; tg.fillRect(0, 0, w, h);
+    tg.globalCompositeOperation = 'lighter'; tg.lineJoin = 'bevel'; tg.lineCap = 'round';
+    // torn rings of the rift edge and rune circles rushing past
+    T.ringTimer -= dt * T.speed;
+    if (T.ringTimer <= 0 && T.speed > 0) { T.rings.push(newRing(4.2)); T.ringTimer = 0.6; }
+    for (const r of T.rings) { r.z -= T.speed * dt * 0.9; r.rot += r.spin * dt; }
+    T.rings = T.rings.filter((r) => r.z > 0.1 && r.z < 4.8).sort((a, b) => b.z - a.z);
+    for (const r of T.rings) {
+      const R = F / r.z, fade = clamp((4.2 - r.z) / 1.2, 0, 1) * clamp((r.z - 0.1) / 0.4, 0, 1);
+      if (r.rune) {
+        const n = 56, sz = clamp(2.2 * dpr / r.z, 0.8, 9);
+        tg.fillStyle = rgba([201, 163, 91], 0.55 * fade);
+        for (let i = 0; i < n; i++) { if (i % 7 === 0) continue; const a = r.rot + i / n * Math.PI * 2; tg.fillRect(vx + Math.cos(a) * R - sz / 2, vy + Math.sin(a) * R - sz / 2, sz, sz); }
+      } else {
+        tg.beginPath();
+        r.v.forEach((k, i) => { const a = r.rot + i / r.v.length * Math.PI * 2, x = vx + Math.cos(a) * R * k, y = vy + Math.sin(a) * R * k; i ? tg.lineTo(x, y) : tg.moveTo(x, y); });
+        tg.closePath();
+        tg.lineWidth = clamp(9 * dpr / r.z, 2, 40); tg.strokeStyle = rgba(cv, 0.16 * fade); tg.stroke();
+        tg.lineWidth = clamp(2.5 * dpr / r.z, 1, 12); tg.strokeStyle = rgba(ca, 0.45 * fade); tg.stroke();
+        tg.lineWidth = clamp(0.8 * dpr / r.z, 0.6, 4); tg.strokeStyle = rgba(cc, 0.8 * fade); tg.stroke();
+      }
+    }
+    // star streaks
+    for (const p of T.stars) {
+      p.z -= T.speed * dt;
+      if (p.z < 0.05) Object.assign(p, newStar(4));
+      if (p.z > 4.2) Object.assign(p, newStar(0.06));
+      const tail = p.z + Math.abs(T.speed) * (reduce ? 0.004 : 0.06) + 0.002;
+      const x1 = vx + p.x / p.z * F, y1 = vy + p.y / p.z * F, x0 = vx + p.x / tail * F, y0 = vy + p.y / tail * F;
+      const a = clamp((4 - p.z) / 1.5, 0, 1) * 0.85;
+      tg.strokeStyle = rgba(p.c === 0 ? cc : p.c === 1 ? ca : [243, 223, 166], a);
+      tg.lineWidth = clamp(1.2 * dpr / p.z, 0.6 * dpr, 3.2 * dpr);
+      tg.beginPath(); tg.moveTo(x0, y0); tg.lineTo(x1, y1); tg.stroke();
+    }
+    // the light at the end
+    const coreR = (16 + 10 * Math.sin(time * 2.2) ** 2) * dpr * Math.max(1, S / 2) + T.exit * Math.max(w, h) * 1.3;
+    rg = tg.createRadialGradient(vx, vy, 0, vx, vy, coreR);
+    rg.addColorStop(0, rgba(cc, 0.95)); rg.addColorStop(0.3, rgba(ca, 0.5)); rg.addColorStop(1, rgba(cv, 0));
+    tg.fillStyle = rg; tg.fillRect(vx - coreR, vy - coreR, coreR * 2, coreR * 2);
+    tg.globalCompositeOperation = 'source-over';
+  }
 
   // ---------- actions ----------
-  const enter = $('enter');
+  const enter = $('enter'), thud = $('thud'), flash = $('flash'), arrive = $('arrive');
   enter.addEventListener('pointerenter', () => { hovered = enter; });
   enter.addEventListener('pointerleave', () => { hovered = null; });
   enter.addEventListener('focus', () => { hovered = enter; });
   enter.addEventListener('blur', () => { hovered = null; });
+  function go(phase) { st.phase = phase; st.phaseT = 0; }
   enter.onclick = () => {
-    if (st.enterT >= 0 || st.connecting) return;
+    if (st.phase !== 'menu') return;
     if (st.server === 'offline') { check(); return; }
     if (st.server !== 'online') return;
-    st.enterT = 0; stage.classList.add('leaving'); hovered = null;
+    // in game the connection starts right now; the animation runs on top of it and never delays it
+    go('enter'); st.enterT = 0; st.connT = 0; st.why = ''; tunnelReset();
+    stage.classList.add('leaving'); hovered = null;
   };
-  const STEPS = [[0, 'Подключение к серверу'], [1.2, 'Вход в аккаунт'], [2.4, 'Загрузка ресурсов сервера'], [4, 'Загрузка мира']];
-  $('cancel').onclick = () => {
-    st.connecting = false; st.enterT = -1; st.boost = 0;
-    stage.classList.remove('connecting', 'leaving');
-    enter.focus({ preventScroll: true });
-  };
+  const STEPS = [[0, 'Соединение'], [1.2, 'Вход в аккаунт'], [2.4, 'Загрузка ресурсов'], [3.8, 'Загрузка мира']];
+  function back(why) { if (st.phase === 'enter' || st.phase === 'tunnel') { st.why = why; go('back'); thud.hidden = true; } }
+  $('cancel').onclick = () => back('Подключение отменено');
+  $('again').onclick = () => { arrive.hidden = true; stage.style.visibility = ''; go('menu'); st.cam = 0; stage.classList.remove('leaving'); world.style.opacity = 1; enter.focus({ preventScroll: true }); };
   const toast = $('toast'); let toastTimer = 0;
-  function say(text) { toast.textContent = text; toast.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, 2200); }
+  function say(text, ms = 2400) { toast.textContent = text; toast.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { toast.hidden = true; }, ms); }
   document.querySelectorAll('[data-screen]').forEach((b) => { b.onclick = () => say(`Откроется экран «${b.dataset.screen}» (он уже есть в моде)`); b.addEventListener('pointerenter', () => { hovered = b; }); b.addEventListener('pointerleave', () => { hovered = null; }); });
   document.querySelector('[data-quit]').onclick = () => say('В игре эта кнопка закрывает Minecraft');
-  addEventListener('keydown', (e) => { if (e.key === 'Enter' && document.activeElement === document.body) enter.click(); if (e.key === 'Escape' && st.connecting) $('cancel').click(); });
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && document.activeElement === document.body && st.phase === 'menu') enter.click();
+    if (e.key === 'Escape') back('Подключение отменено');
+  });
 
   // ---------- main loop ----------
   let last = performance.now();
-  const flash = $('flash');
   function frame(now) {
     const dt = Math.min(0.1, (now - last) / 1000); last = now; const time = now / 1000;
     const target = st.server === 'online' ? 1 : st.server === 'offline' ? 0 : 0.45;
     st.power += (target - st.power) * Math.min(1, dt * 1.8);
-    st.pull += ((hovered === enter && st.server === 'online' ? 1 : 0) - st.pull) * Math.min(1, dt * 4);
-    if (st.server === 'offline' && !st.connecting) { st.recheck -= dt; if (st.recheck <= 0) check(); else $('enterSub').textContent = `Повторная проверка через ${Math.ceil(st.recheck)} с · нажмите, чтобы проверить сейчас`; }
-    if (st.enterT >= 0 && !st.connecting) {
+    st.pull += ((hovered === enter && st.server === 'online' && st.phase === 'menu' ? 1 : 0) - st.pull) * Math.min(1, dt * 4);
+    if (st.server === 'offline' && st.phase === 'menu') { st.recheck -= dt; if (st.recheck <= 0) check(); else $('enterSub').textContent = `Повторная проверка через ${Math.ceil(st.recheck)} с · нажмите, чтобы проверить сейчас`; }
+    st.phaseT += dt;
+    if (st.phase === 'enter' || st.phase === 'tunnel') {
+      st.connT += dt;
+      // mock connection: succeeds after ~5 s or fails after ~3 s
+      const done = st.connT >= (demoFail ? 3.2 : 5.2);
+      if (done && st.phase === 'tunnel') { if (demoFail) back('Не удалось подключиться: сервер не ответил'); else go('exit'); }
+    }
+    let tunnelA = 0;
+    if (st.phase === 'enter') {
       st.enterT += dt;
       st.boost = 1.5 * ease((st.enterT - 0.3) / 0.6);
-      flash.style.opacity = reduce ? 0 : ease((st.enterT - 0.78) / 0.22);
-      if (st.enterT >= 1.05) { st.connecting = true; st.connT = 0; stage.classList.add('connecting'); }
-    } else if (st.connecting) {
-      st.connT += dt;
-      flash.style.opacity = Math.max(0, 1 - st.connT / 0.5);
-      st.boost += (-0.35 - st.boost) * Math.min(1, dt * 2);
-      let label = STEPS[0][1]; for (const [t, l] of STEPS) if (st.connT >= t) label = l;
-      $('connStatus').textContent = label;
-      $('connSub').textContent = st.connT >= 4 ? 'В игре дальше открывается мир. В макете на этом всё.' : 'play.spellandiron.net';
-    } else { flash.style.opacity = 0; st.boost += (0 - st.boost) * Math.min(1, dt * 3); }
-    drawRift(time, dt);
+      st.cam = reduce ? ease((st.enterT - 0.6) / 0.6) : clamp((st.enterT - 0.55) / 1.05, 0, 1);
+      tunnelA = ease((st.enterT - 1.3) / 0.35);
+      if (st.enterT >= 1.65) { go('tunnel'); thud.hidden = false; }
+    } else if (st.phase === 'tunnel') {
+      tunnelA = 1;
+    } else if (st.phase === 'exit') {
+      tunnelA = 1; thud.hidden = true;
+      T.exit = ease(st.phaseT / 0.8);
+      flash.style.opacity = ease((st.phaseT - 0.45) / 0.4);
+      if (st.phaseT >= 0.9) { go('arrived'); st.cam = 0; stage.style.visibility = 'hidden'; st.boost = 0; world.style.opacity = 1; arrive.hidden = false; $('again').focus({ preventScroll: true }); }
+    } else if (st.phase === 'arrived') {
+      flash.style.opacity = Math.max(0, 1 - st.phaseT / 0.9);
+    } else if (st.phase === 'back') {
+      // the tunnel stalls and fades, the camera pulls back out, the character steps out of the rift
+      tunnelA = 1 - ease(st.phaseT / 0.6);
+      st.cam = 1 - ease((st.phaseT - 0.2) / 0.9);
+      st.boost += (0 - st.boost) * Math.min(1, dt * 2);
+      if (st.phaseT >= 1.7) { go('menu'); st.cam = 0; stage.classList.remove('leaving'); say(st.why, 3200); enter.focus({ preventScroll: true }); }
+    } else { st.boost += (0 - st.boost) * Math.min(1, dt * 3); }
+    if (st.phase === 'tunnel' || st.phase === 'enter') {
+      let i = 0; STEPS.forEach(([t], k) => { if (st.connT >= t) i = k; });
+      $('tStatus').textContent = STEPS[i][1];
+      [...$('steps').children].forEach((el, k) => { el.className = k < i ? 'done' : k === i ? 'now' : ''; });
+    }
+    applyCamera();
+    if (tunnelA < 1 && st.phase !== 'arrived') drawRift(time, dt); else { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, fx.width, fx.height); }
+    drawTunnel(time, dt, st.phase === 'arrived' ? 0 : tunnelA);
     animateHero(time, dt);
     requestAnimationFrame(frame);
   }
