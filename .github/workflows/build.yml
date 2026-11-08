@@ -190,6 +190,13 @@ jobs:
           "
           grep -E "Awakening:|E2E:" rift/client-mod/client.log > /tmp/frames/log.txt || true
           cp rift/client-mod/run/config/epicfight*.toml /tmp/frames/ 2>/dev/null || true
+          jar=$(ls mods-client/*epic*fight*.jar 2>/dev/null | head -1)
+          if [ -n "$jar" ]; then
+            { unzip -l "$jar" | grep -oE "yesman/[A-Za-z0-9_/$]*(PlayerPatch|Config|Option|FirstPerson|RenderEngine|PlayerMode)[A-Za-z0-9_$]*\.class" | sort -u
+              for c in yesman.epicfight.world.capabilities.entitypatch.player.PlayerPatch yesman.epicfight.client.world.capabilities.entitypatch.player.LocalPlayerPatch; do
+                echo "== $c"; javap -cp "$jar" "$c" 2>&1 | grep -iE "mode|battle|mining|class |firstperson|first_person"; done
+            } > /tmp/frames/epicfight-api.txt 2>&1 || true
+          fi
           # the scene as a video: one frame per client tick (20 fps), 960 px wide
           if ls rift/client-mod/run/screenshots/awakening-v-*.png > /dev/null 2>&1; then
             command -v ffmpeg > /dev/null || sudo apt-get install -y -qq ffmpeg > /dev/null
