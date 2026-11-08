@@ -200,6 +200,52 @@
   </div>
 </div>
 
+<!-- Spell and Iron Rift account: sign in or register (the project's own account, on top of the Minecraft licence) -->
+<div class="authgate" id="authGate" hidden role="dialog" aria-modal="true" aria-labelledby="authTitle">
+  <div class="authgate__brand" aria-hidden="true">
+    <svg class="authgate__sigil" viewBox="0 0 120 120"><use href="#rift-sigil-big"/></svg>
+    <div class="logo__words"><span class="logo__top">Spell <i>&amp;</i> Iron</span><span class="logo__main">Rift</span></div>
+    <p class="authgate__tagline" data-i18n="acc.tagline"></p>
+  </div>
+  <form class="authcard" id="authForm" novalidate>
+    <h2 id="authTitle" class="sr-only" data-i18n="acc.title"></h2>
+    <div class="authcard__tabs" role="tablist">
+      <button type="button" role="tab" class="is-active" data-authtab="login" data-i18n="acc.login"></button>
+      <button type="button" role="tab" data-authtab="register" data-i18n="acc.register"></button>
+    </div>
+    <label class="afield"><span data-i18n="acc.nick"></span><input type="text" id="accNick" maxlength="16" autocomplete="username" spellcheck="false" required></label>
+    <p class="afield__hint" id="accNickHint" data-i18n="acc.nick.rules"></p>
+    <label class="afield"><span data-i18n="acc.password"></span>
+      <span class="afield__pw"><input type="password" id="accPass" maxlength="128" autocomplete="current-password" required><button type="button" class="afield__eye" id="accEye" aria-label="show"></button></span></label>
+    <div class="authcard__register" id="accRegisterOnly" hidden>
+      <label class="afield"><span data-i18n="acc.password2"></span><input type="password" id="accPass2" maxlength="128" autocomplete="new-password"></label>
+      <ul class="pwrules" id="accRules">
+        <li data-rule="len" data-i18n="acc.rule.len"></li>
+        <li data-rule="mix" data-i18n="acc.rule.mix"></li>
+        <li data-rule="nick" data-i18n="acc.rule.nick"></li>
+        <li data-rule="same" data-i18n="acc.rule.same"></li>
+      </ul>
+    </div>
+    <p class="authcard__error" id="accError" role="alert" hidden></p>
+    <button type="submit" class="btn btn--gold authcard__submit" id="accSubmit" data-i18n="acc.login.go"></button>
+    <p class="authcard__note" id="accForgot" data-i18n="acc.forgot"></p>
+    <p class="authcard__note authcard__note--dim" data-i18n="acc.licence"></p>
+    <button type="button" class="link authcard__test" id="accTestMode" data-i18n="acc.testmode"></button>
+  </form>
+</div>
+
+<div class="modal" id="pwModal" hidden role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+  <form class="modal__panel" id="pwForm" novalidate>
+    <h3 id="pwTitle" data-i18n="acc.pw.title"></h3>
+    <p class="hint" id="pwWhy"></p>
+    <label class="afield"><span data-i18n="acc.pw.current"></span><input type="password" id="pwCurrent" autocomplete="current-password"></label>
+    <label class="afield"><span data-i18n="acc.pw.new"></span><input type="password" id="pwNew" autocomplete="new-password"></label>
+    <label class="afield"><span data-i18n="acc.password2"></span><input type="password" id="pwNew2" autocomplete="new-password"></label>
+    <p class="authcard__error" id="pwError" role="alert" hidden></p>
+    <div class="upd__actions"><button type="submit" class="btn btn--gold" data-i18n="acc.pw.save"></button><button type="button" class="btn btn--ghost" id="pwCancel" data-i18n="close"></button></div>
+  </form>
+</div>
+
 <!-- Launcher update: offered on every start, never required -->
 <div class="modal" id="updateModal" hidden role="dialog" aria-modal="true" aria-labelledby="updTitle">
   <div class="modal__panel">

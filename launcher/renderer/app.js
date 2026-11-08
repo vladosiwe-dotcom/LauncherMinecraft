@@ -89,6 +89,7 @@
     if (state.running) l.textContent = t('play.running');
     else if (state.busy) l.textContent = t('play.cancel');
     else if (state.settings?.testMode) l.textContent = t('play.test', { nick: state.settings.testNick || '—' });
+    else if (acc.available && !acc.account) l.textContent = t('acc.play.signin');
     else if (!state.session) l.textContent = t('play.login');
     else if (!state.installed?.buildId) l.textContent = t('play.install');
     else if (state.update && state.update.changes > 0) l.textContent = t('play.update');
@@ -168,6 +169,11 @@
   }
 
   async function renderProfile() {
+    await renderProfileInner();
+    const info = $('#profileView .profile__info');
+    if (info) { info.insertAdjacentHTML('beforeend', accountCard()); bindAccountCard(); }
+  }
+  async function renderProfileInner() {
     const s = state.session, v = $('#profileView');
     if (!s) {
       v.innerHTML = `<div class="profile__skin"><canvas width="160" height="320" id="skinFront"></canvas></div><div class="profile__info"><h3>${t('profile.guest')}</h3><p class="hint">${t('profile.license')}</p><p class="hint">${t('profile.secure')}</p><div class="profile__actions"><button type="button" class="btn" id="pLogin">${t('profile.login')}</button></div></div>`;
@@ -239,6 +245,7 @@
   $('#playBtn').addEventListener('click', async () => {
     if (state.busy) { await sir.cancel(); return; }
     if (state.settings?.testMode && !/^[A-Za-z0-9_]{3,16}$/.test(state.settings.testNick || '')) { go('server'); $('#testNick').focus(); return; }
+    if (!state.settings?.testMode && acc.available && !acc.account) { renderAuthGate(); return; }
     if (!state.settings?.testMode && !state.session) { login(); return; }
     state.busy = true; renderPlay();
     try { await call(sir.play()); const st = await call(sir.state()); state.installed = st.installed; }
@@ -295,6 +302,104 @@
   $('#openGameDir').addEventListener('click', () => sir.openGameDir());
   $('#openLogs').addEventListener('click', () => sir.openLogs());
 
+  // ---------- Spell and Iron Rift account (sign in / register; Microsoft still provides the game licence) ----------
+  const acc = { available: false, account: null, mode: 'login' };
+  const NICK = /^[A-Za-z0-9_]{3,16}$/;
+  const pwRules = (pw, nick) => ({ len: pw.length >= 8, mix: /\p{L}/u.test(pw) && /\d/.test(pw), nick: !nick || !pw.toLowerCase().includes(nick.toLowerCase()) });
+  function accError(e) {
+    const code = String(e.code || '').replace(/^account\./, '');
+    if (code === 'account_banned') return t('acc.err.account_banned', { reason: e.message && e.message !== 'account_banned' ? e.message : '—' });
+    return T(`acc.err.${code}`) ?? (e.code === 'network' ? t('err.network') : t('acc.err.generic'));
+  }
+  const T = (k) => ((I18N[state.lang] && I18N[state.lang][k]) ?? I18N.ru[k]);
+  function setAuthMode(m) {
+    acc.mode = m;
+    $$('[data-authtab]').forEach((b) => b.classList.toggle('is-active', b.dataset.authtab === m));
+    $('#accRegisterOnly').hidden = m !== 'register';
+    $('#accNickHint').hidden = m !== 'register';
+    $('#accForgot').hidden = m !== 'login';
+    $('#accSubmit').textContent = t(m === 'login' ? 'acc.login.go' : 'acc.register.go');
+    $('#accPass').autocomplete = m === 'login' ? 'current-password' : 'new-password';
+    $('#accError').hidden = true;
+    checkRules();
+  }
+  function checkRules() {
+    const nick = $('#accNick').value.trim(), pw = $('#accPass').value, r = pwRules(pw, nick);
+    r.same = pw.length > 0 && pw === $('#accPass2').value;
+    $$('#accRules [data-rule]').forEach((li) => li.classList.toggle('is-ok', !!r[li.dataset.rule]));
+    $('#accNick').setAttribute('aria-invalid', String(acc.mode === 'register' && nick.length > 0 && !NICK.test(nick)));
+    return r;
+  }
+  function renderAuthGate() {
+    const need = acc.available && !acc.account && !state.settings?.testMode;
+    $('#authGate').hidden = !need;
+    if (need && document.activeElement?.closest?.('#authGate') == null) setTimeout(() => $('#accNick').focus(), 50);
+    if (acc.account?.mustChangePassword) openPw(true);
+    renderPlay();
+  }
+  async function loadAccount() {
+    try { const r = await call(sir.account()); acc.available = r.available; acc.account = r.account; } catch { acc.available = false; }
+    renderAuthGate();
+  }
+  $$('[data-authtab]').forEach((b) => b.addEventListener('click', () => setAuthMode(b.dataset.authtab)));
+  ['#accNick', '#accPass', '#accPass2'].forEach((id) => $(id).addEventListener('input', checkRules));
+  $('#accEye').addEventListener('click', () => {
+    const on = $('#accPass').type === 'password';
+    $('#accPass').type = on ? 'text' : 'password'; $('#accPass2').type = $('#accPass').type;
+    $('#accEye').classList.toggle('is-on', on);
+  });
+  $('#accTestMode').addEventListener('click', () => { $('#authGate').hidden = true; go('server'); loadServerView(); });
+  $('#authForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const nick = $('#accNick').value.trim(), pw = $('#accPass').value, err = $('#accError');
+    err.hidden = true;
+    if (acc.mode === 'register') {
+      const r = checkRules();
+      const bad = !NICK.test(nick) ? 'nick_format' : !r.len ? 'password_short' : !r.mix ? 'password_letters_digits' : !r.nick ? 'password_contains_nick' : !r.same ? 'password_mismatch' : null;
+      if (bad) { err.textContent = T(`acc.err.${bad}`); err.hidden = false; return; }
+    } else if (!nick || !pw) { err.textContent = T('acc.err.invalid_credentials'); err.hidden = false; return; }
+    $('#accSubmit').disabled = true;
+    try {
+      acc.account = await call(acc.mode === 'register' ? sir.accountRegister(nick, pw) : sir.accountLogin(nick, pw));
+      $('#accPass').value = ''; $('#accPass2').value = '';
+      renderAuthGate(); renderProfile();
+    } catch (ex) { err.textContent = accError(ex); err.hidden = false; }
+    finally { $('#accSubmit').disabled = false; }
+  });
+  sir.onAccount?.((a) => { acc.account = a; renderAuthGate(); renderProfile(); });
+
+  function openPw(forced) {
+    $('#pwWhy').textContent = t(forced ? 'acc.pw.forced' : 'acc.pw.why');
+    $('#pwCancel').hidden = !!forced;
+    $('#pwError').hidden = true;
+    ['#pwCurrent', '#pwNew', '#pwNew2'].forEach((id) => { $(id).value = ''; });
+    $('#pwModal').hidden = false; $('#pwCurrent').focus();
+  }
+  $('#pwCancel').addEventListener('click', () => { $('#pwModal').hidden = true; });
+  $('#pwForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const cur = $('#pwCurrent').value, nw = $('#pwNew').value, err = $('#pwError'), r = pwRules(nw, acc.account?.nick ?? '');
+    const bad = !r.len ? 'password_short' : !r.mix ? 'password_letters_digits' : !r.nick ? 'password_contains_nick' : nw !== $('#pwNew2').value ? 'password_mismatch' : null;
+    if (bad) { err.textContent = T(`acc.err.${bad}`); err.hidden = false; return; }
+    try { acc.account = await call(sir.accountPassword(cur, nw)); $('#pwModal').hidden = true; renderProfile(); }
+    catch (ex) { err.textContent = accError(ex); err.hidden = false; }
+  });
+
+  /** The account card under the Minecraft profile in the Profile view. */
+  function accountCard() {
+    const a = acc.account;
+    if (!acc.available) return '';
+    if (!a) return `<div class="accountcard"><div class="accountcard__head"><b>${t('acc.title')}</b></div><p class="hint">${t('acc.none')}</p><div class="profile__actions"><button type="button" class="btn btn--gold" id="accOpen">${t('acc.login')}</button></div></div>`;
+    return `<div class="accountcard"><div class="accountcard__head"><b>${esc(a.nick)}</b><span class="role role--${a.role}">${t(`acc.role.${a.role}`)}</span></div>
+      <dl><dt>${t('acc.uuid')}</dt><dd class="mono">${esc(a.id)}</dd><dt>${t('acc.minecraft')}</dt><dd>${a.minecraft ? esc(a.minecraft.name) : t('acc.notLinked')}</dd></dl>
+      <div class="profile__actions"><button type="button" class="btn" id="accPw">${t('acc.pw.title')}</button><button type="button" class="btn btn--ghost" id="accOut">${t('acc.logout')}</button></div></div>`;
+  }
+  function bindAccountCard() {
+    $('#accOpen')?.addEventListener('click', () => { setAuthMode('login'); $('#authGate').hidden = false; $('#accNick').focus(); });
+    $('#accPw')?.addEventListener('click', () => openPw(false));
+    $('#accOut')?.addEventListener('click', async () => { await call(sir.accountLogout()).catch(() => null); acc.account = null; renderAuthGate(); renderProfile(); });
+  }
+
   // ---------- server view: test mode and "My server" ----------
   const srv = { state: 'not_installed', log: [] };
   const SRV_PILL = { not_installed: '', stopped: '', installing: 'is-warn', starting: 'is-warn', running: 'is-ok', stopping: 'is-warn' };
@@ -326,7 +431,7 @@
   }
   sir.onServerLine?.((l) => appendLog([l]));
   sir.onServerState?.((st) => { srv.state = st; if (st === 'stopped') loadServerView(); else renderServer(); });
-  $('#testMode').addEventListener('change', async (e) => { await save({ testMode: e.target.checked }); renderServer(); });
+  $('#testMode').addEventListener('change', async (e) => { await save({ testMode: e.target.checked }); renderServer(); renderAuthGate(); });
   $('#testNick').addEventListener('change', async (e) => {
     const v = e.target.value.trim();
     if (v && !/^[A-Za-z0-9_]{3,16}$/.test(v)) { showError(Object.assign(new Error(t('srv.nick.bad')), { code: 'unknown' })); return; }
@@ -395,6 +500,7 @@
     const st = await call(sir.state());
     Object.assign(state, { settings: st.settings, session: st.session, installed: st.installed, running: st.gameRunning, lang: st.settings.language, totalRamMb: st.totalRamMb });
     applyI18n(); renderAll();
+    setAuthMode('login'); loadAccount();
     loadServer(); loadNews(); loadUpdate(); detectHw(); checkLauncherUpdate();
     setInterval(loadServer, 30000);
     setInterval(loadUpdate, 10 * 60000);

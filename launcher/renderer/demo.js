@@ -5,7 +5,8 @@
   document.documentElement.classList.add('demo');
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const ok = (data) => ({ ok: true, data });
-  const listeners = { progress: [], 'auth:code': [], session: [], game: [], 'launcher:progress': [], 'server:line': [], 'server:state': [] };
+  const listeners = { progress: [], 'auth:code': [], session: [], game: [], 'launcher:progress': [], 'server:line': [], 'server:state': [], account: [] };
+  const demoAcc = { account: null };
   const demoSrv = { state: 'not_installed', build: null, log: [] };
   const emit = (k, p) => listeners[k].forEach((f) => f(p));
   let session = { name: 'Ardent_Vex', uuid: '5c1f2a9e8d7b4c3aa1e0f9d8c7b6a5f4', skin: null };
@@ -35,6 +36,12 @@
     serverStatus: async () => { await wait(300); return ok({ online: true, players: 137, maxPlayers: 300, motd: 'Spell and Iron Rift', latencyMs: 34, checkedAt: new Date().toISOString() }); },
     news: async () => { await wait(200); return ok(news[settings.language] || news.ru); },
     detectHardware: async () => ok({ hardware: { cpuModel: 'AMD Ryzen 7 5800X 8-Core Processor', cpuThreads: 16, totalRamMb: 16384, gpuName: 'NVIDIA GeForce RTX 3060', gpuVendor: 'nvidia', vramMb: 12288, glVersion: 4.6 }, recommended: { preset: 'high', reasons: ['mid_range_discrete'] }, recommendedHeapMb: 6144 }),
+    account: async () => ok({ available: true, account: demoAcc.account }),
+    accountRegister: async (nick, pw) => { await wait(500); if (nick.toLowerCase() === 'admin') return { ok: false, error: { code: 'account.nick_reserved', message: 'nick_reserved' } }; demoAcc.account = { id: '6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f', nick, role: 'player', status: 'active', mustChangePassword: false, minecraft: null }; emit('account', demoAcc.account); return ok(demoAcc.account); },
+    accountLogin: async (nick, pw) => { await wait(500); if (pw.length < 8) return { ok: false, error: { code: 'account.invalid_credentials', message: 'invalid_credentials' } }; demoAcc.account = { id: '6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f', nick, role: 'admin', status: 'active', mustChangePassword: false, minecraft: { uuid: '0f4e2b0a-9f2c-4f7f-8b1d-2a3c4d5e6f70', name: 'Rift_Hunter', linkedAt: new Date().toISOString() } }; return ok(demoAcc.account); },
+    accountLogout: async () => { demoAcc.account = null; return ok(true); },
+    accountPassword: async () => ok(demoAcc.account),
+    onAccount: (f) => (listeners.account.push(f), () => {}),
     myServer: async () => ok({ state: demoSrv.state, build: demoSrv.build, log: demoSrv.log, port: 25565 }),
     installMyServer: async () => { demoSrv.state = 'installing'; for (let i = 1; i <= 10; i++) { await wait(120); emit('progress', { stage: 'server', done: i, total: 10 }); } demoSrv.build = 'b-0008'; demoSrv.state = 'stopped'; return ok(true); },
     startMyServer: async () => { demoSrv.state = 'starting'; emit('server:state', 'starting'); for (const l of ['[Server thread/INFO]: Starting minecraft server version 1.21.1', '[Server thread/INFO]: Loading 64 mods', '[Server thread/INFO]: Preparing level "world"', '[Server thread/INFO]: Done (8.412s)! For help, type "help"']) { await wait(500); demoSrv.log.push(l); emit('server:line', l); } demoSrv.state = 'running'; emit('server:state', 'running'); return ok(true); },

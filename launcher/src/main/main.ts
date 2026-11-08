@@ -9,6 +9,8 @@ import { GameManager } from '../core/game.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
 import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
+import { RiftAccountError } from '../core/riftaccount.js';
+import { AccountService } from './accounts.js';
 import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
@@ -29,6 +31,7 @@ let busy: AbortController | null = null;
 let gameRunning = false;
 let launcherUpdate: LauncherUpdate | null = null;
 let localServer: LocalServer | null = null;
+let accounts: AccountService;
 function myServer(): LocalServer {
   if (!localServer || localServer.dir !== join(settings.installDir, 'server')) {
     localServer = new LocalServer(settings.installDir, join(settings.installDir, 'server'));
@@ -86,6 +89,7 @@ function publicSession() {
 }
 
 function errorPayload(e: unknown) {
+  if (e instanceof RiftAccountError) return { code: `account.${e.code}`, message: e.reason ?? e.message };
   if (e instanceof AuthError) return { code: `auth.${e.code}`, message: e.message };
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
@@ -231,6 +235,8 @@ function registerIpc() {
     if (gameRunning) throw new Error('game already running');
     // Test mode plays with a nickname on the server on this PC; otherwise a Microsoft account is required.
     const s = settings.testMode ? testProfile() : await ensureFreshSession();
+    // The project account must be signed in, active and linked to this Minecraft profile (verified by Mojang).
+    if (!settings.testMode) await accounts.readyToPlay({ name: s.name, uuid: s.uuid, accessToken: s.accessToken });
     busy?.abort(); busy = new AbortController();
     const signed: SignedManifest = await api().manifest(settings.channel);
     const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
@@ -296,6 +302,9 @@ app.whenReady().then(async () => {
   settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'), defaultSettings(app.getPath('appData'), Math.round(os.totalmem() / 1048576)));
   settings = await settingsStore.load();
   registerIpc();
+  accounts = new AccountService({ apiBase: config.apiBase, allowInsecureLocal: config.allowInsecureLocalApi, userData: app.getPath('userData'), handle, send, log });
+  accounts.register();
+  await accounts.restore();
   await createWindow();
   void restoreSession().then(() => send('auth:session', publicSession()));
 });
