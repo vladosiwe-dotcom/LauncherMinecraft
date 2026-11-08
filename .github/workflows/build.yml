@@ -112,6 +112,12 @@ jobs:
         with:
           ref: claude/skills-connection-7u72hg
           path: solo
+      # the awakening scene on joining lives in its own mod
+      - uses: actions/checkout@v4
+        with:
+          repository: vladosiwe-dotcom/Openace
+          ref: claude/awakening-mod
+          path: openace
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -119,6 +125,9 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Build Solo Status
         working-directory: solo
+        run: ./gradlew build --no-daemon -q && ls -l build/libs
+      - name: Build Openace (awakening on joining)
+        working-directory: openace
         run: ./gradlew build --no-daemon -q && ls -l build/libs
       - name: Fetch Create and other mods from Modrinth
         run: python3 rift/tools/e2e/fetch_mods.py mods-server mods-client "$GITHUB_STEP_SUMMARY" required:create optional:sable optional:epic-fight optional:irons-spells-n-spellbooks+irons-lib+curios+geckolib+playeranimator
@@ -131,12 +140,12 @@ jobs:
           cp rift/tools/e2e/server.properties server/server.properties
           echo "-Xmx3G" > server/user_jvm_args.txt
           cp mods-server/*.jar server/mods/ 2>/dev/null || true
-          cp solo/build/libs/*.jar server/mods/
+          cp solo/build/libs/*.jar openace/build/libs/*.jar server/mods/
           ls server/mods
       - name: Start the server
         run: |
           cd server
-          SOLO_E2E_PLACE=1 nohup ./run.sh nogui > server.log 2>&1 &  # the second player to join is put in front of the first
+          OPENACE_E2E_PLACE=1 nohup ./run.sh nogui > server.log 2>&1 &  # the second player to join is put in front of the first
           for i in $(seq 1 180); do
             if grep -q 'Done (' server.log; then echo "server is up"; exit 0; fi
             if [ -d crash-reports ] || ! pgrep -f 'neoforge' > /dev/null; then echo "::error::server crashed or exited while starting"; tail -80 server.log; exit 1; fi
@@ -152,14 +161,14 @@ jobs:
           for RUN in rift/client-mod/run /tmp/clientB/run; do
             mkdir -p $RUN/mods $RUN/spellironrift
             cp mods-client/*.jar $RUN/mods/ 2>/dev/null || true
-            cp solo/build/libs/*.jar $RUN/mods/
+            cp solo/build/libs/*.jar openace/build/libs/*.jar $RUN/mods/
             cp rift/tools/e2e/options.txt $RUN/options.txt
             echo '{"server":{"host":"127.0.0.1","port":25565},"apiBase":"","preset":"balanced","buildVersion":"e2e"}' > $RUN/spellironrift/launcher.json
           done
       - name: Play with two players (Observer watches Waker wake up)
         env:
           RIFT_E2E: '1'
-          SOLO_E2E_SHOTS: '1'
+          OPENACE_E2E_SHOTS: '1'
           LIBGL_ALWAYS_SOFTWARE: '1'
         run: |
           set +e
