@@ -5,7 +5,7 @@ import net from 'node:net';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { verifyManifest } from '@sir/shared';
+import { verifyManifest, verifyLauncherRelease } from '@sir/shared';
 import { parseToml, inRange, inspectArchive } from '../dist/modinspect.js';
 import { analyzeBuild } from '../dist/builds.js';
 import { createApp } from '../dist/app.js';
@@ -179,6 +179,28 @@ test('site settings write server.properties, news is localized', async () => {
   assert.ok(uk.some((n) => n.title === 'Ніч Розлому'));
   const en = await (await fetch(`${base}/api/public/news?lang=en`)).json();
   assert.ok(en.some((n) => n.title === 'Ночь Разлома'), 'falls back to Russian');
+});
+
+test('launcher releases: publish signs the release, versions must grow, moderators cannot publish', async () => {
+  assert.equal((await fetch(`${base}/api/public/launcher`)).status, 404);
+  const s = await login('owner', 'correct horse 42');
+  const call = api(s);
+  const up = await call('POST', `/library/upload?name=${encodeURIComponent('Rift-Setup-0.2.0.exe')}&category=other`, null, Buffer.from('MZ fake installer'));
+  assert.equal(up.status, 200);
+  const notes = { ru: 'Новое меню', uk: 'Нове меню', en: 'New menu' };
+  assert.equal((await call('POST', '/launcher', { version: '0.2', notes, files: { win: up.body.id } })).status, 400);
+  assert.equal((await call('POST', '/launcher', { version: '0.2.0', notes, files: {} })).status, 400);
+  const r = await call('POST', '/launcher', { version: '0.2.0', notes, files: { win: up.body.id } });
+  assert.equal(r.status, 200);
+  const signed = await (await fetch(`${base}/api/public/launcher`)).json();
+  assert.equal(signed.release.version, '0.2.0');
+  assert.equal(signed.release.files.win.sha256, up.body.sha256);
+  assert.ok(verifyLauncherRelease(signed, [global.__keys.publicPem]));
+  assert.equal((await call('POST', '/launcher', { version: '0.1.9', notes, files: { win: up.body.id } })).status, 409);
+  const m = await login('mod', 'moderator pass 7');
+  assert.equal((await api(m)('POST', '/launcher', { version: '0.3.0', notes, files: { win: up.body.id } })).status, 403);
+  assert.equal((await call('POST', '/launcher/unpublish')).status, 200);
+  assert.equal((await fetch(`${base}/api/public/launcher`)).status, 404);
 });
 
 test('login rate limit', async () => {

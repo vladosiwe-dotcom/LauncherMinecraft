@@ -1,4 +1,4 @@
-import type { SignedManifest } from '@sir/shared';
+import type { SignedLauncherRelease, SignedManifest } from '@sir/shared';
 import { fetchJson } from './http.js';
 
 export interface ServerStatus { online: boolean; players: number; maxPlayers: number; motd: string; version?: string; latencyMs?: number; checkedAt: string }
@@ -13,5 +13,6 @@ export class RiftApi {
   }
   manifest(channel: 'stable' | 'testing') { return fetchJson<SignedManifest>(`${this.base}/api/public/manifest?channel=${channel}`); }
   status() { return fetchJson<ServerStatus>(`${this.base}/api/public/status`, { retries: 0, timeoutMs: 8000 }); }
+  launcher() { return fetchJson<SignedLauncherRelease>(`${this.base}/api/public/launcher`, { retries: 0, timeoutMs: 8000 }); }
   news(lang: string) { return fetchJson<NewsItem[]>(`${this.base}/api/public/news?lang=${encodeURIComponent(lang)}`, { retries: 1 }); }
 }

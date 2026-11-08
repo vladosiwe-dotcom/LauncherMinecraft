@@ -49,7 +49,7 @@
   // ---------- shell ----------
   const NAV = [
     ['nav.g.server', [['overview', 'server.view'], ['console', 'server.view'], ['players', 'server.view']]],
-    ['nav.g.content', [['library', 'server.view'], ['builds', 'server.view']]],
+    ['nav.g.content', [['library', 'server.view'], ['builds', 'server.view'], ['launcher', 'server.view']]],
     ['nav.g.community', [['news', 'news.manage'], ['site', 'server.view']]],
     ['nav.g.system', [['backups', 'backups.manage'], ['users', 'users.manage'], ['audit', 'audit.view']]],
   ];
@@ -251,7 +251,7 @@
     const cats = ['mod', 'resourcepack', 'shaderpack', 'config', 'other'];
     const list = items.filter((i) => i.category === S.libTab).sort((a, b) => a.name.localeCompare(b.name));
     c.innerHTML = `
-      ${manage ? `<div class="drop" id="drop" tabindex="0" role="button">${t('lib.upload')}<input type="file" id="fileIn" multiple accept=".jar,.zip,.toml,.json,.json5,.cfg,.properties,.txt,.snbt" hidden></div>
+      ${manage ? `<div class="drop" id="drop" tabindex="0" role="button">${t('lib.upload')}<input type="file" id="fileIn" multiple accept=".jar,.zip,.toml,.json,.json5,.cfg,.properties,.txt,.snbt,.exe,.dmg,.AppImage" hidden></div>
       <div class="row"><label class="field" style="max-width:260px"><span>${t('lib.category')}</span><select id="upCat"><option value="">${t('lib.auto')}</option>${cats.map((x) => `<option value="${x}">${t(`lib.tab.${x}`)}</option>`).join('')}</select></label></div>` : ''}
       <section class="panel">
         <div class="panel__head"><div class="tabs">${cats.map((x) => `<button type="button" data-lt="${x}" class="${x === S.libTab ? 'is-active' : ''}">${t(`lib.tab.${x}`)} <span class="muted">${items.filter((i) => i.category === x).length}</span></button>`).join('')}</div></div>
@@ -283,6 +283,40 @@
     drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('is-over'); };
     drop.ondragleave = () => drop.classList.remove('is-over');
     drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('is-over'); upload([...e.dataTransfer.files]); };
+  };
+
+  // Launcher releases: installers are uploaded to the library ("Other"), the published release is signed for launchers.
+  VIEWS.launcher = async (c) => {
+    const [{ releases, published }, items] = await Promise.all([api('GET', '/launcher'), api('GET', '/library')]);
+    const pub = can('builds.publish');
+    const installers = items.filter((i) => i.category === 'other').sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+    const current = releases.find((r) => r.id === published);
+    const nameOf = (id) => esc(items.find((i) => i.id === id)?.fileName ?? '—');
+    const pick = (p, ext) => `<label class="field"><span>${t(`lr.${p}`)}</span><select id="lr_${p}"><option value="">${t('lr.none')}</option>${installers.filter((i) => ext.test(i.fileName)).map((i) => `<option value="${i.id}">${esc(i.fileName)} · ${fmtSize(i.size)}</option>`).join('')}</select></label>`;
+    const nextVersion = current ? current.version.replace(/\d+$/, (n) => String(Number(n) + 1)) : '0.2.0';
+    c.innerHTML = `
+      ${pub ? `<section class="panel"><div class="panel__head"><h2>${t('lr.new')}</h2></div><div class="panel__body">
+        <p class="muted">${t('lr.help')}</p>
+        <div class="row"><label class="field" style="max-width:180px"><span>${t('lr.version')}</span><input id="lr_version" placeholder="${esc(nextVersion)}" maxlength="16"></label></div>
+        <div class="row">${pick('win', /\.exe$/i)}${pick('mac', /\.dmg$/i)}${pick('linux', /\.AppImage$/i)}</div>
+        ${['ru', 'uk', 'en'].map((l) => `<label class="field"><span>${t('lr.notes')} · ${l.toUpperCase()}</span><textarea id="lr_notes_${l}" rows="3" maxlength="4000"></textarea></label>`).join('')}
+        <p><button type="button" class="btn btn--gold" id="lrPublish">${t('lr.publish')}</button></p>
+      </div></section>` : ''}
+      <section class="panel"><div class="panel__head"><h2>${t('lr.list')}</h2><span class="spacer"></span>${pub && current ? `<button type="button" class="btn btn--sm btn--ghost" id="lrUnpublish">${t('lr.unpublish')}</button>` : ''}</div>
+        ${releases.length ? `<div class="table-wrap"><table><thead><tr><th>${t('lr.version')}</th><th>${t('lr.files')}</th><th>${t('lr.notes')}</th><th>${t('builds.updated')}</th><th></th></tr></thead><tbody>
+          ${releases.map((r) => `<tr><td><b>${esc(r.version)}</b>${r.id === published ? ` <span class="chip" data-k="published">${t('lr.live')}</span>` : ''}</td>
+            <td class="mono">${['win', 'mac', 'linux'].filter((p) => r.files[p]).map((p) => `${p}: ${nameOf(r.files[p])}`).join('<br>')}</td>
+            <td>${esc((r.notes[S.lang] || r.notes.ru || '').slice(0, 120))}</td><td>${fmtDate(r.publishedAt ?? r.createdAt)}<span class="sub">${esc(r.createdBy)}</span></td>
+            <td class="actions">${pub && r.id !== published ? `<button type="button" class="btn btn--sm" data-lrp="${r.id}">${t('lr.republish')}</button>` : ''}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="empty">${t('lr.empty')}</div>`}
+      </section>`;
+    if (!pub) return;
+    $('#lrPublish').onclick = guard(async () => {
+      const body = { version: $('#lr_version').value.trim(), notes: { ru: $('#lr_notes_ru').value, uk: $('#lr_notes_uk').value, en: $('#lr_notes_en').value }, files: { win: $('#lr_win').value, mac: $('#lr_mac').value, linux: $('#lr_linux').value } };
+      dialog(`<h3>${t('lr.publish')} ${esc(body.version)}?</h3><p>${t('lr.confirm')}</p>`, async () => { await api('POST', '/launcher', body); toast(t('lr.done')); render(); }, t('lr.publish'));
+    });
+    $('#lrUnpublish')?.addEventListener('click', () => dialog(`<h3>${t('lr.unpublish')}?</h3><p>${t('lr.unpublishText')}</p>`, async () => { await api('POST', '/launcher/unpublish'); toast(t('saved')); render(); }, t('lr.unpublish'), true));
+    $$('[data-lrp]').forEach((b) => { b.onclick = () => dialog(`<h3>${t('lr.republish')}?</h3>`, async () => { await api('POST', `/launcher/${b.dataset.lrp}/publish`); toast(t('lr.done')); render(); }, t('lr.republish')); });
   };
 
   VIEWS.builds = async (c) => {

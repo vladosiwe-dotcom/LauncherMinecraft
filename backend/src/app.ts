@@ -11,7 +11,8 @@ import type { Stores } from './db.js';
 import { Library } from './library.js';
 import { ServerProcess } from './serverproc.js';
 import { ping, type PingResult } from './slp.js';
-import type { Build, News, Role, User } from './types.js';
+import type { Build, LauncherReleaseRecord, News, Role, User } from './types.js';
+import { LAUNCHER_PLATFORMS, LAUNCHER_VERSION_RE, compareVersions, signLauncherRelease, type LauncherRelease } from '@sir/shared';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const LANGS = ['ru', 'uk', 'en'] as const;
@@ -66,6 +67,12 @@ export function createApp({ config, db, keys }: AppDeps) {
     const lang = LANGS.includes(req.query.lang as never) ? (req.query.lang as (typeof LANGS)[number]) : 'ru';
     const s = await db.site.read();
     return { text: s.rules[lang] || s.rules.ru };
+  }));
+  app.get('/api/public/launcher', wrap(async (_req, res) => {
+    const { signed } = await db.launcher.read();
+    if (!signed) throw httpError(404, 'no_launcher_release');
+    res.setHeader('Cache-Control', 'no-cache');
+    return signed;
   }));
   app.get('/files/:sha', (req, res) => {
     const sha = req.params.sha!;
@@ -291,6 +298,57 @@ export function createApp({ config, db, keys }: AppDeps) {
     await auth.revokeUser(req.params.id!);
     await audit(me(res), 'user.delete', req.params.id);
   }));
+  // launcher releases: installers come from the library, the published release is signed for launchers
+  const signRelease = async (r: LauncherReleaseRecord) => {
+    const items = (await db.library.read()).items;
+    const files: LauncherRelease['files'] = {};
+    for (const p of LAUNCHER_PLATFORMS) {
+      const id = r.files[p];
+      if (!id) continue;
+      const item = items.find((i) => i.id === id);
+      if (!item) throw httpError(409, `launcher_file_missing:${p}`);
+      files[p] = { url: `${config.publicBaseUrl}/files/${item.sha256}`, sha256: item.sha256, size: item.size, fileName: item.fileName };
+    }
+    const publishedAt = new Date().toISOString();
+    return { publishedAt, signed: signLauncherRelease({ version: r.version, publishedAt, notes: r.notes, files }, keys.privatePem, keys.publicPem) };
+  };
+  admin.get('/launcher', requirePerm('server.view'), wrap(async () => {
+    const d = await db.launcher.read();
+    return { releases: [...d.releases].reverse(), published: d.published };
+  }));
+  admin.post('/launcher', requirePerm('builds.publish'), wrap(async (req, res) => {
+    const b = req.body ?? {};
+    const version = String(b.version ?? '').trim();
+    if (!LAUNCHER_VERSION_RE.test(version)) throw httpError(400, 'bad_version');
+    const d = await db.launcher.read();
+    const current = d.releases.find((r) => r.id === d.published);
+    if (current && compareVersions(version, current.version) <= 0) throw httpError(409, `version_not_newer:${current.version}`);
+    const text = (v: unknown) => String(v ?? '').slice(0, 4000);
+    const notes = { ru: text(b.notes?.ru), uk: text(b.notes?.uk), en: text(b.notes?.en) };
+    const files: LauncherReleaseRecord['files'] = {};
+    for (const p of LAUNCHER_PLATFORMS) if (typeof b.files?.[p] === 'string' && b.files[p]) files[p] = b.files[p];
+    if (!Object.keys(files).length) throw httpError(400, 'launcher_no_files');
+    const rec: LauncherReleaseRecord = { id: randomUUID(), version, notes, files, createdAt: new Date().toISOString(), createdBy: me(res).username };
+    const { publishedAt, signed } = await signRelease(rec);
+    rec.publishedAt = publishedAt;
+    await db.launcher.update((x) => { x.releases.push(rec); x.published = rec.id; x.signed = signed; });
+    await audit(me(res), 'launcher.publish', version);
+    return rec;
+  }));
+  admin.post('/launcher/:id/publish', requirePerm('builds.publish'), wrap(async (req, res) => {
+    const d = await db.launcher.read();
+    const rec = d.releases.find((r) => r.id === req.params.id);
+    if (!rec) throw httpError(404, 'not_found');
+    const { publishedAt, signed } = await signRelease(rec);
+    await db.launcher.update((x) => { const r = x.releases.find((y) => y.id === rec.id)!; r.publishedAt = publishedAt; x.published = rec.id; x.signed = signed; });
+    await audit(me(res), 'launcher.republish', rec.version);
+    return { ok: true };
+  }));
+  admin.post('/launcher/unpublish', requirePerm('builds.publish'), wrap(async (_req, res) => {
+    await db.launcher.update((x) => { x.published = null; x.signed = null; });
+    await audit(me(res), 'launcher.unpublish');
+  }));
+
   admin.get('/audit', requirePerm('audit.view'), wrap(async () => (await db.audit.read()).entries.slice(0, 500)));
   admin.get('/keys/public', requirePerm('builds.publish'), wrap(async () => ({ keyId: keys.keyId, publicPem: keys.publicPem })));
 

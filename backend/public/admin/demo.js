@@ -118,6 +118,10 @@
       if (m[1] === 'pardon') db.banned = db.banned.filter((x) => x.name !== b.name);
       push(`> ${m[1]} ${b.name} ${b.reason ?? ''}`, 'panel'); audit(`players.${m[1]}`, b.name);
     }],
+    ['GET', /^\/launcher$/, () => { db.launcher ??= { releases: [], published: null }; return { releases: [...db.launcher.releases].reverse(), published: db.launcher.published }; }],
+    ['POST', /^\/launcher$/, (b) => { db.launcher ??= { releases: [], published: null }; if (!/^\d+\.\d+\.\d+$/.test(b.version)) throw err(400, 'bad_version'); const files = Object.fromEntries(Object.entries(b.files).filter(([, v]) => v)); if (!Object.keys(files).length) throw err(400, 'launcher_no_files'); const r = { id: `l${Date.now()}`, version: b.version, notes: b.notes, files, createdAt: new Date().toISOString(), publishedAt: new Date().toISOString(), createdBy: 'owner' }; db.launcher.releases.push(r); db.launcher.published = r.id; audit('launcher.publish', r.version); return r; }],
+    ['POST', /^\/launcher\/unpublish$/, () => { db.launcher.published = null; }],
+    ['POST', /^\/launcher\/([^/]+)\/publish$/, (_b, m) => { db.launcher.published = m[1]; }],
     ['GET', /^\/library$/, () => db.library],
     ['POST', /^\/library\/upload/, async (_b, _m, raw, path) => {
       const name = decodeURIComponent(/name=([^&]+)/.exec(path)[1]);

@@ -62,3 +62,10 @@ export interface Build {
 export interface News { id: string; tag: 'update' | 'event' | 'maintenance' | 'news'; date: string; published: boolean; title: { ru: string; uk: string; en: string }; body: { ru: string; uk: string; en: string } }
 export interface SiteSettings { motd: string; rules: { ru: string; uk: string; en: string }; maxPlayers: number; whitelist: boolean }
 export interface AuditEntry { at: string; user: string; action: string; detail?: string }
+
+/** A launcher release in Rift Control. Installers are library items; the published one is signed for launchers. */
+export interface LauncherReleaseRecord {
+  id: string; version: string; createdAt: string; createdBy: string; publishedAt?: string;
+  notes: { ru: string; uk: string; en: string };
+  files: Partial<Record<'win' | 'mac' | 'linux', string>>; // library item ids
+}

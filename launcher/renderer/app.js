@@ -293,12 +293,55 @@
   $('#openGameDir').addEventListener('click', () => sir.openGameDir());
   $('#openLogs').addEventListener('click', () => sir.openLogs());
 
+  // ---------- launcher update (asked on every start, never required) ----------
+  let launcherUpd = null;
+  function showLauncherUpdate() {
+    if (!launcherUpd) return;
+    $('#updVersions').innerHTML = t('lupd.versions', { cur: esc(launcherUpd.current), new: `<b>${esc(launcherUpd.version)}</b>` }) + ` · ${fmtBytes(launcherUpd.size)}`;
+    $('#updNotes').textContent = launcherUpd.notes;
+    $('#updProgress').hidden = true;
+    $('#updNow').disabled = false; $('#updLater').textContent = t('lupd.later');
+    $('#updateModal').hidden = false;
+    $('#updNow').focus();
+  }
+  async function checkLauncherUpdate() {
+    try { launcherUpd = await call(sir.checkLauncherUpdate()); } catch { launcherUpd = null; }
+    $('#updBadge').hidden = !launcherUpd;
+    if (launcherUpd) showLauncherUpdate();
+  }
+  let updBusy = false;
+  $('#updBadge').onclick = showLauncherUpdate;
+  $('#updLater').onclick = () => {
+    if (updBusy) { sir.cancelLauncherUpdate(); return; }
+    $('#updateModal').hidden = true;
+  };
+  $('#updNow').onclick = async () => {
+    updBusy = true;
+    $('#updNow').disabled = true; $('#updLater').textContent = t('lupd.cancel');
+    $('#updProgress').hidden = false; $('#updBar').style.width = '0%'; $('#updPct').textContent = '0%';
+    const off = sir.onLauncherProgress((p) => {
+      const pct = Math.min(100, Math.floor((p.done / Math.max(1, p.total)) * 100));
+      $('#updBar').style.width = `${pct}%`; $('#updPct').textContent = `${pct}%`;
+    });
+    try {
+      const r = await call(sir.installLauncherUpdate());
+      if (r === 'opened') { $('#updNotes').textContent = t('lupd.opened'); $('#updProgress').hidden = true; }
+    } catch (e) {
+      $('#updateModal').hidden = true;
+      if (e.code !== 'unknown' || !/abort/i.test(e.message)) showError(e);
+    } finally {
+      off?.(); updBusy = false;
+      $('#updNow').disabled = false; $('#updLater').textContent = t('lupd.later');
+    }
+  };
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#updateModal').hidden && !updBusy) $('#updateModal').hidden = true; });
+
   // ---------- boot ----------
   (async () => {
     const st = await call(sir.state());
     Object.assign(state, { settings: st.settings, session: st.session, installed: st.installed, running: st.gameRunning, lang: st.settings.language, totalRamMb: st.totalRamMb });
     applyI18n(); renderAll();
-    loadServer(); loadNews(); loadUpdate(); detectHw();
+    loadServer(); loadNews(); loadUpdate(); detectHw(); checkLauncherUpdate();
     setInterval(loadServer, 30000);
     setInterval(loadUpdate, 10 * 60000);
   })();

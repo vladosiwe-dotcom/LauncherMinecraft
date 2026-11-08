@@ -46,6 +46,7 @@ export function stores(dataDir: string) {
     builds: new JsonStore<{ builds: import('./types.js').Build[]; published: { stable: string | null; testing: string | null } }>(join(dataDir, 'builds.json'), () => ({ builds: [], published: { stable: null, testing: null } })),
     news: new JsonStore<{ items: import('./types.js').News[] }>(join(dataDir, 'news.json'), () => ({ items: [] })),
     site: new JsonStore<import('./types.js').SiteSettings>(join(dataDir, 'site.json'), () => ({ motd: 'Spell and Iron Rift', rules: { ru: '', uk: '', en: '' }, maxPlayers: 100, whitelist: false })),
+    launcher: new JsonStore<{ releases: import('./types.js').LauncherReleaseRecord[]; published: string | null; signed: import('@sir/shared').SignedLauncherRelease | null }>(join(dataDir, 'launcher.json'), () => ({ releases: [], published: null, signed: null })),
     audit: new JsonStore<{ entries: import('./types.js').AuditEntry[] }>(join(dataDir, 'audit.json'), () => ({ entries: [] })),
   };
 }

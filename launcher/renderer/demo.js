@@ -5,7 +5,7 @@
   document.documentElement.classList.add('demo');
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const ok = (data) => ({ ok: true, data });
-  const listeners = { progress: [], 'auth:code': [], session: [], game: [] };
+  const listeners = { progress: [], 'auth:code': [], session: [], game: [], 'launcher:progress': [] };
   const emit = (k, p) => listeners[k].forEach((f) => f(p));
   let session = { name: 'Ardent_Vex', uuid: '5c1f2a9e8d7b4c3aa1e0f9d8c7b6a5f4', skin: null };
   const settings = { installDir: 'C:\\Users\\Player\\AppData\\Roaming\\SpellAndIronRift', memoryMb: 6144, javaPath: null, jvmArgs: '', width: 1600, height: 900, fullscreen: false, preset: null, presetIsManual: false, language: 'ru', channel: 'stable', closeOnLaunch: false };
@@ -34,6 +34,10 @@
     serverStatus: async () => { await wait(300); return ok({ online: true, players: 137, maxPlayers: 300, motd: 'Spell and Iron Rift', latencyMs: 34, checkedAt: new Date().toISOString() }); },
     news: async () => { await wait(200); return ok(news[settings.language] || news.ru); },
     detectHardware: async () => ok({ hardware: { cpuModel: 'AMD Ryzen 7 5800X 8-Core Processor', cpuThreads: 16, totalRamMb: 16384, gpuName: 'NVIDIA GeForce RTX 3060', gpuVendor: 'nvidia', vramMb: 12288, glVersion: 4.6 }, recommended: { preset: 'high', reasons: ['mid_range_discrete'] }, recommendedHeapMb: 6144 }),
+    checkLauncherUpdate: async () => { await wait(600); return ok({ current: '0.1.0', version: '0.2.0', size: 92_400_000, publishedAt: new Date().toISOString(), notes: '• Новое главное меню в игре: разлом и полёт в него при входе\n• Иконка и логотип в новом стиле\n• Лаунчер сам предлагает обновиться' }); },
+    installLauncherUpdate: async () => { for (let i = 1; i <= 20; i++) { await wait(90); emit('launcher:progress', { done: i * 4_620_000, total: 92_400_000 }); } return ok('opened'); },
+    cancelLauncherUpdate: async () => ok(true),
+    onLauncherProgress: (f) => (listeners['launcher:progress'].push(f), () => { listeners['launcher:progress'] = listeners['launcher:progress'].filter((x) => x !== f); }),
     checkUpdate: async () => ok({ version: '0.3.2', buildId: 'b-0008', changelog: {}, downloadBytes: 187_400_000, changes: 9 }),
     play: async () => {
       const stages = [['pack', 187_400_000, 40], ['launch', 1, 6]];

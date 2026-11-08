@@ -13,6 +13,7 @@
 <header class="titlebar">
   <div class="titlebar__brand"><svg viewBox="0 0 32 32" aria-hidden="true"><use href="#rift-sigil"/></svg><span>Spell and Iron Rift</span></div>
   <div class="titlebar__drag"></div>
+  <button type="button" class="titlebar__update" id="updBadge" hidden data-i18n="lupd.badge"></button>
   <div class="titlebar__lang" id="langSwitch"></div>
   <div class="titlebar__win">
     <button type="button" data-win="min" aria-label="Minimize"><svg viewBox="0 0 10 10"><path d="M1 5h8"/></svg></button>
@@ -166,6 +167,21 @@
     <p class="waiting"><span class="spinner" aria-hidden="true"></span><span data-i18n="login.waiting"></span></p>
     <p class="hint" data-i18n="profile.secure"></p>
     <button type="button" class="btn btn--ghost" id="loginCancel" data-i18n="play.cancel"></button>
+  </div>
+</div>
+
+<!-- Launcher update: offered on every start, never required -->
+<div class="modal" id="updateModal" hidden role="dialog" aria-modal="true" aria-labelledby="updTitle">
+  <div class="modal__panel">
+    <h3 id="updTitle" data-i18n="lupd.title"></h3>
+    <p class="upd__versions" id="updVersions"></p>
+    <div class="upd__notes" id="updNotes"></div>
+    <div class="upd__progress" id="updProgress" hidden><div class="progress__track"><i id="updBar"></i></div><span id="updPct"></span></div>
+    <p class="hint" data-i18n="lupd.optional"></p>
+    <div class="upd__actions">
+      <button type="button" class="btn btn--gold" id="updNow" data-i18n="lupd.now"></button>
+      <button type="button" class="btn btn--ghost" id="updLater" data-i18n="lupd.later"></button>
+    </div>
   </div>
 </div>
 

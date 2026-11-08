@@ -304,3 +304,15 @@ input:focus, select:focus { border-color: var(--violet); outline: none; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ---------- launcher update ---------- */
+.titlebar__update { -webkit-app-region: no-drag; margin-right: 8px; padding: 4px 10px; border: 1px solid var(--gold-lo); background: rgba(154,107,255,.14); color: var(--gold-hi); font: 500 11px var(--body); letter-spacing: .06em; cursor: pointer; }
+.titlebar__update:hover, .titlebar__update:focus-visible { background: rgba(154,107,255,.28); outline: none; }
+.upd__versions { margin: -8px 0 14px; font: 600 15px var(--display); letter-spacing: .08em; color: var(--text-dim); }
+.upd__versions b { color: var(--gold-hi); }
+.upd__notes { max-height: 220px; overflow: auto; margin-bottom: 14px; padding: 12px 14px; white-space: pre-wrap; font-size: 13px; line-height: 1.55; color: var(--text); background: rgba(255,255,255,.04); border-left: 2px solid var(--violet); }
+.upd__notes:empty { display: none; }
+.upd__progress { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.upd__progress .progress__track { flex: 1; }
+.upd__progress span { font: 10px var(--pixel); color: var(--gold-hi); min-width: 42px; text-align: right; }
+.upd__actions { display: flex; gap: 10px; flex-wrap: wrap; }

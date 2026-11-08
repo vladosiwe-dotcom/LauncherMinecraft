@@ -8,6 +8,8 @@ import { AuthError, MicrosoftAuth, type MinecraftSession } from '../core/auth.js
 import { GameManager } from '../core/game.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
+import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
+import { spawn } from 'node:child_process';
 import os from 'node:os';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -24,6 +26,8 @@ let session: MinecraftSession | null = null;
 let hardware: HardwareInfo | null = null;
 let busy: AbortController | null = null;
 let gameRunning = false;
+let launcherUpdate: LauncherUpdate | null = null;
+let launcherDownload: AbortController | null = null;
 
 const send = (ch: string, payload: unknown) => win?.webContents.send(ch, payload);
 const logFile = () => join(app.getPath('userData'), 'logs', 'launcher.log');
@@ -74,6 +78,7 @@ function errorPayload(e: unknown) {
   if (e instanceof AuthError) return { code: `auth.${e.code}`, message: e.message };
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
+  if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
   if (/ENOSPC/.test(msg)) return { code: 'disk.full', message: msg };
   if (/fetch failed|network|ENOTFOUND|ECONNRE|timed? ?out/i.test(msg)) return { code: 'network', message: msg };
   if (/signature/.test(msg)) return { code: 'manifest.signature', message: msg };
@@ -84,6 +89,27 @@ function handle<T>(channel: string, fn: (...args: any[]) => Promise<T>) {
   ipcMain.handle(channel, async (_e, ...args) => {
     try { return { ok: true, data: await fn(...args) }; } catch (e) { await log(`${channel}: ${(e as Error).stack ?? e}`); return { ok: false, error: errorPayload(e) }; }
   });
+}
+
+/** Starts the downloaded installer. Windows: the NSIS installer replaces the app; Linux AppImage: swap the file and restart. */
+async function installLauncher(file: string): Promise<'restarting' | 'opened'> {
+  if (process.platform === 'win32') {
+    spawn(file, [], { detached: true, stdio: 'ignore' }).unref();
+    setTimeout(() => app.quit(), 400);
+    return 'restarting';
+  }
+  const appImage = process.env.APPIMAGE;
+  if (process.platform === 'linux' && appImage) {
+    const tmp = `${appImage}.new`;
+    await fs.copyFile(file, tmp);
+    await fs.chmod(tmp, 0o755);
+    await fs.rename(tmp, appImage);
+    app.relaunch({ execPath: appImage });
+    setTimeout(() => app.exit(0), 200);
+    return 'restarting';
+  }
+  await shell.openPath(file); // macOS disk image (drag to Applications) or a manual install
+  return 'opened';
 }
 
 function registerIpc() {
@@ -133,6 +159,20 @@ function registerIpc() {
   });
 
   handle('server:status', () => api().status());
+  // launcher self-update: asked on every start, always optional
+  handle('launcher:check', async () => {
+    launcherUpdate = await checkLauncherUpdate(api(), VERSION, config.trustedManifestKeys, settings.language);
+    return launcherUpdate ? { current: VERSION, version: launcherUpdate.version, notes: launcherUpdate.notes, size: launcherUpdate.file.size, publishedAt: launcherUpdate.publishedAt } : null;
+  });
+  handle('launcher:install', async () => {
+    if (!launcherUpdate) throw new Error('no launcher update');
+    if (gameRunning) throw Object.assign(new Error('close the game before updating the launcher'), { code: 'game_running' });
+    launcherDownload = new AbortController();
+    const file = await downloadLauncherUpdate(launcherUpdate, join(app.getPath('userData'), 'updates'), (done, total) => send('launcher:progress', { done, total }), launcherDownload.signal);
+    await log(`launcher update ${VERSION} -> ${launcherUpdate.version} downloaded`);
+    return installLauncher(file);
+  });
+  handle('launcher:cancel', async () => { launcherDownload?.abort(); return true; });
   handle('news:list', () => api().news(settings.language));
 
   handle('hw:detect', async (gpu: { vendorId?: number; renderer?: string; glVersion?: string }) => {
