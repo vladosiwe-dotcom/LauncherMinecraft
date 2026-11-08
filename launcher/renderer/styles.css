@@ -316,3 +316,18 @@ input:focus, select:focus { border-color: var(--violet); outline: none; }
 .upd__progress .progress__track { flex: 1; }
 .upd__progress span { font: 10px var(--pixel); color: var(--gold-hi); min-width: 42px; text-align: right; }
 .upd__actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ---------- server view (test mode + My server) ---------- */
+.view--server.is-active { display: flex; flex-direction: column; gap: 18px; }
+.srv-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.srv-card { display: flex; flex-direction: column; gap: 10px; }
+.srv-card .field { margin: 0; }
+.srv-card input[type=text] { width: 100%; }
+.srv-build { margin: 0; font-size: 13px; color: var(--text-dim); }
+.srv-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.check { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text); }
+.srv-console { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
+.srv-console pre { margin: 0; height: 220px; overflow: auto; padding: 10px 12px; background: #07060b; border: 1px solid var(--line); font: 12px/1.45 ui-monospace, 'Cascadia Mono', Consolas, monospace; color: #cfc8dd; white-space: pre-wrap; word-break: break-word; }
+.srv-cmd { display: flex; gap: 8px; }
+.srv-cmd input { flex: 1; min-width: 0; font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; }
+@media (max-width: 1180px) { .srv-grid { grid-template-columns: 1fr; } }

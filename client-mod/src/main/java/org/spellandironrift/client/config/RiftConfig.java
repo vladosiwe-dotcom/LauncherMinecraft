@@ -36,6 +36,12 @@ public final class RiftConfig {
             String host = server.get("host").getAsString();
             int port = server.get("port").getAsInt();
             if (!host.matches("[A-Za-z0-9.-]{1,253}") || port < 1 || port > 65535) throw new IOException("bad server address");
+            // Test mode (nickname, no Microsoft account) may only play on this PC or the local network.
+            boolean offline = o.has("offline") && o.get("offline").getAsBoolean();
+            if (offline && !isLocalHost(host)) {
+                RiftClientMod.LOG.warn("Test mode only connects to a server on this PC or the local network; using 127.0.0.1 instead of {}", host);
+                host = "127.0.0.1";
+            }
             String api = o.has("apiBase") ? o.get("apiBase").getAsString() : "";
             if (!api.isEmpty() && !api.startsWith("https://") && !api.startsWith("http://localhost") && !api.startsWith("http://127.0.0.1")) api = "";
             values = new Values(host, port, api, o.has("preset") ? o.get("preset").getAsString() : "balanced", o.has("buildVersion") ? o.get("buildVersion").getAsString() : "?");
@@ -45,6 +51,20 @@ public final class RiftConfig {
     }
 
     public static Values get() { return values; }
+
+    /** This PC or a private local network (127.x, 10.x, 192.168.x, 172.16–31.x). */
+    static boolean isLocalHost(String host) {
+        String h = host.trim().toLowerCase(java.util.Locale.ROOT);
+        if (h.equals("localhost")) return true;
+        String[] p = h.split("\\.");
+        if (p.length != 4) return false;
+        try {
+            int a = Integer.parseInt(p[0]), b = Integer.parseInt(p[1]);
+            return a == 127 || a == 10 || (a == 192 && b == 168) || (a == 172 && b >= 16 && b <= 31);
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
 
     /** Remember a preset the player picked in-game so the launcher installs matching shader files next time. */
     public static void savePresetRequest(String preset) {

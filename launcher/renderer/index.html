@@ -28,6 +28,7 @@
   <nav class="rail" aria-label="Main">
     <button type="button" class="rail__item is-active" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9h-6v-6H9v6H3z"/></svg><span data-i18n="nav.home"></span></button>
     <button type="button" class="rail__item" data-view="news"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 9h8M8 13h8M8 17h5"/></svg><span data-i18n="nav.news"></span></button>
+    <button type="button" class="rail__item" data-view="server"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h16v6H4zM7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg><span data-i18n="nav.server"></span></button>
     <button type="button" class="rail__item" data-view="settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM19 12l2-1-1-3-2 .3-1.4-1.4.3-2-3-1-1 2h-2l-1-2-3 1 .3 2L6 7.3 4 7 3 10l2 1v2l-2 1 1 3 2-.3 1.4 1.4-.3 2 3 1 1-2h2l1 2 3-1-.3-2 1.4-1.4 2 .3 1-3-2-1z"/></svg><span data-i18n="nav.settings"></span></button>
     <div class="rail__spacer"></div>
     <button type="button" class="rail__item rail__profile" data-view="profile"><canvas class="avatar" width="8" height="8" data-avatar></canvas><span data-i18n="nav.profile"></span></button>
@@ -93,6 +94,35 @@
     </section>
 
     <!-- SETTINGS -->
+    <section class="view view--server" data-view="server">
+      <header class="section-head"><h2 data-i18n="nav.server"></h2></header>
+      <div class="srv-grid">
+        <div class="card srv-card">
+          <div class="card__head"><span class="eyebrow" data-i18n="srv.test"></span><span class="pill" id="testPill"></span></div>
+          <p class="hint" data-i18n="srv.test.d"></p>
+          <label class="switch"><input type="checkbox" id="testMode"><span></span><b data-i18n="srv.test.on"></b></label>
+          <div class="field"><label for="testNick" data-i18n="srv.nick"></label><input type="text" id="testNick" maxlength="16" spellcheck="false" autocomplete="off" placeholder="Hunter_01"><p class="hint" data-i18n="srv.nick.d"></p></div>
+        </div>
+        <div class="card srv-card">
+          <div class="card__head"><span class="eyebrow" data-i18n="srv.my"></span><span class="pill" id="srvPill"></span></div>
+          <p class="hint" data-i18n="srv.my.d"></p>
+          <p class="srv-build" id="srvBuild"></p>
+          <label class="check"><input type="checkbox" id="srvEula"><span data-i18n="srv.eula"></span></label>
+          <p class="hint mono">https://www.minecraft.net/eula</p>
+          <div class="srv-actions">
+            <button type="button" class="btn" id="srvInstall" data-i18n="srv.install"></button>
+            <button type="button" class="btn btn--gold" id="srvStart" data-i18n="srv.start"></button>
+            <button type="button" class="btn btn--ghost" id="srvStop" data-i18n="srv.stop"></button>
+          </div>
+        </div>
+      </div>
+      <div class="card srv-console">
+        <div class="card__head"><span class="eyebrow" data-i18n="srv.console"></span><span class="hint" id="srvAddr"></span></div>
+        <pre id="srvLog" aria-live="polite"></pre>
+        <form id="srvCmdForm" class="srv-cmd"><input type="text" id="srvCmd" spellcheck="false" autocomplete="off" placeholder="list"><button type="submit" class="btn" data-i18n="srv.send"></button></form>
+      </div>
+    </section>
+
     <section class="view view--settings" data-view="settings">
       <header class="section-head"><h2 data-i18n="nav.settings"></h2><span class="toast" id="savedToast" hidden data-i18n="settings.saved"></span></header>
       <div class="tabs" role="tablist">

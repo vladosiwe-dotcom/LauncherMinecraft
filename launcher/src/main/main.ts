@@ -8,6 +8,7 @@ import { AuthError, MicrosoftAuth, type MinecraftSession } from '../core/auth.js
 import { GameManager } from '../core/game.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
+import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
 import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
@@ -27,6 +28,16 @@ let hardware: HardwareInfo | null = null;
 let busy: AbortController | null = null;
 let gameRunning = false;
 let launcherUpdate: LauncherUpdate | null = null;
+let localServer: LocalServer | null = null;
+function myServer(): LocalServer {
+  if (!localServer || localServer.dir !== join(settings.installDir, 'server')) {
+    localServer = new LocalServer(settings.installDir, join(settings.installDir, 'server'));
+    localServer.on('line', (l: string) => send('server:line', l));
+    localServer.on('state', (st: string) => send('server:state', st));
+  }
+  return localServer;
+}
+const serverOptions = () => ({ port: settings.serverPort, memoryMb: settings.serverMemoryMb, testMode: settings.testMode, motd: 'Spell and Iron Rift' });
 let launcherDownload: AbortController | null = null;
 
 const send = (ch: string, payload: unknown) => win?.webContents.send(ch, payload);
@@ -79,6 +90,7 @@ function errorPayload(e: unknown) {
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
+  for (const c of ['eula', 'server_running', 'server_missing', 'test_nick']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
   if (/ENOSPC/.test(msg)) return { code: 'disk.full', message: msg };
   if (/fetch failed|network|ENOTFOUND|ECONNRE|timed? ?out/i.test(msg)) return { code: 'network', message: msg };
   if (/signature/.test(msg)) return { code: 'manifest.signature', message: msg };
@@ -110,6 +122,11 @@ async function installLauncher(file: string): Promise<'restarting' | 'opened'> {
   }
   await shell.openPath(file); // macOS disk image (drag to Applications) or a manual install
   return 'opened';
+}
+
+function testProfile() {
+  if (!NICK_RE.test(settings.testNick)) throw Object.assign(new Error('pick a nickname for test mode'), { code: 'test_nick' });
+  return { name: settings.testNick, uuid: offlineUuid(settings.testNick).replace(/-/g, ''), accessToken: '0', xuid: '0' };
 }
 
 function registerIpc() {
@@ -159,6 +176,26 @@ function registerIpc() {
   });
 
   handle('server:status', () => api().status());
+  // "My server": NeoForge server with the same build on this PC
+  handle('myserver:state', async () => ({ state: await myServer().refreshState(), build: await myServer().installedBuild(), log: myServer().history(), port: settings.serverPort, testMode: settings.testMode, eulaAccepted: settings.eulaAccepted }));
+  handle('myserver:install', async (eula: boolean) => {
+    if (eula !== true) throw Object.assign(new Error('Minecraft EULA not accepted'), { code: 'eula' });
+    if (!settings.eulaAccepted) { settings.eulaAccepted = true; await settingsStore.save(settings); }
+    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
+    const manifest = gm.updater.accept(await api().manifest(settings.channel), config.trustedManifestKeys, { allowHttp: config.allowInsecureLocalApi });
+    const javaExe = await gm.javaExe(manifest.java.mojangComponent);
+    await myServer().install(manifest, javaExe, serverOptions(), true, (done, total, detail) => send('progress', { stage: 'server', done, total, detail }));
+    return true;
+  });
+  handle('myserver:start', async () => {
+    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
+    const build = await myServer().installedBuild();
+    if (!build) throw Object.assign(new Error('install the server first'), { code: 'server_missing' });
+    await myServer().start(await gm.javaExe('java-runtime-delta'), serverOptions());
+    return true;
+  });
+  handle('myserver:stop', async () => { await myServer().stop(); return true; });
+  handle('myserver:command', async (text: string) => { myServer().command(String(text ?? '')); return true; });
   // launcher self-update: asked on every start, always optional
   handle('launcher:check', async () => {
     launcherUpdate = await checkLauncherUpdate(api(), VERSION, config.trustedManifestKeys, settings.language);
@@ -192,7 +229,8 @@ function registerIpc() {
 
   handle('game:play', async () => {
     if (gameRunning) throw new Error('game already running');
-    const s = await ensureFreshSession();
+    // Test mode plays with a nickname on the server on this PC; otherwise a Microsoft account is required.
+    const s = settings.testMode ? testProfile() : await ensureFreshSession();
     busy?.abort(); busy = new AbortController();
     const signed: SignedManifest = await api().manifest(settings.channel);
     const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
@@ -262,3 +300,11 @@ app.whenReady().then(async () => {
   void restoreSession().then(() => send('auth:session', publicSession()));
 });
 app.on('window-all-closed', () => { if (!gameRunning) app.quit(); });
+// Stop "My server" properly on exit so the world is saved.
+let stoppingServer = false;
+app.on('before-quit', (e) => {
+  if (!localServer || stoppingServer || !['running', 'starting'].includes(localServer.state)) return;
+  e.preventDefault();
+  stoppingServer = true;
+  void localServer.stop().finally(() => app.quit());
+});

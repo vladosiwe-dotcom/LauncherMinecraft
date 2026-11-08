@@ -88,6 +88,7 @@
     b.disabled = state.running;
     if (state.running) l.textContent = t('play.running');
     else if (state.busy) l.textContent = t('play.cancel');
+    else if (state.settings?.testMode) l.textContent = t('play.test', { nick: state.settings.testNick || '—' });
     else if (!state.session) l.textContent = t('play.login');
     else if (!state.installed?.buildId) l.textContent = t('play.install');
     else if (state.update && state.update.changes > 0) l.textContent = t('play.update');
@@ -223,11 +224,11 @@
   }
   $('#loginCancel').onclick = () => { sir.cancelLogin(); $('#loginModal').hidden = true; };
 
-  const STAGES = ['java', 'minecraft', 'neoforge', 'pack', 'launch'];
+  const STAGES = ['java', 'minecraft', 'neoforge', 'pack', 'launch', 'server'];
   sir.onProgress((p) => {
     $('#progress').hidden = false;
     const pct = p.total ? Math.floor((p.done / p.total) * 100) : 0;
-    $('#progressStage').textContent = `${STAGES.indexOf(p.stage) + 1}/5 · ${t(`stage.${p.stage}`)}`;
+    $('#progressStage').textContent = p.stage === 'server' ? t('stage.server') : `${STAGES.indexOf(p.stage) + 1}/5 · ${t(`stage.${p.stage}`)}`;
     $('#progressPct').textContent = `${pct}%`;
     $('#progressBar').style.width = `${pct}%`;
     $('#progressDetail').textContent = p.stage === 'pack' && p.total > 1000 ? `${fmtBytes(p.done)} / ${fmtBytes(p.total)} · ${p.detail ?? ''}` : (p.detail ?? '');
@@ -237,7 +238,8 @@
 
   $('#playBtn').addEventListener('click', async () => {
     if (state.busy) { await sir.cancel(); return; }
-    if (!state.session) { login(); return; }
+    if (state.settings?.testMode && !/^[A-Za-z0-9_]{3,16}$/.test(state.settings.testNick || '')) { go('server'); $('#testNick').focus(); return; }
+    if (!state.settings?.testMode && !state.session) { login(); return; }
     state.busy = true; renderPlay();
     try { await call(sir.play()); const st = await call(sir.state()); state.installed = st.installed; }
     catch (e) { showError(e, () => $('#playBtn').click()); }
@@ -292,6 +294,58 @@
   });
   $('#openGameDir').addEventListener('click', () => sir.openGameDir());
   $('#openLogs').addEventListener('click', () => sir.openLogs());
+
+  // ---------- server view: test mode and "My server" ----------
+  const srv = { state: 'not_installed', log: [] };
+  const SRV_PILL = { not_installed: '', stopped: '', installing: 'is-warn', starting: 'is-warn', running: 'is-ok', stopping: 'is-warn' };
+  function renderServer() {
+    const s = state.settings; if (!s) return;
+    $('#testMode').checked = !!s.testMode;
+    if (document.activeElement !== $('#testNick')) $('#testNick').value = s.testNick || '';
+    const tp = $('#testPill'); tp.className = `pill ${s.testMode ? 'is-warn' : ''}`; tp.textContent = t(s.testMode ? 'srv.test.pillOn' : 'srv.test.pillOff');
+    const sp = $('#srvPill'); sp.className = `pill ${SRV_PILL[srv.state] ?? ''}`; sp.textContent = t(`srv.state.${srv.state}`);
+    $('#srvBuild').textContent = srv.build ? t('srv.build', { b: srv.build }) : t('srv.notInstalled');
+    $('#srvEula').checked = !!s.eulaAccepted;
+    const busy = ['installing', 'starting', 'stopping'].includes(srv.state);
+    $('#srvInstall').textContent = t(srv.build ? 'srv.update' : 'srv.install');
+    $('#srvInstall').disabled = busy || srv.state === 'running' || !$('#srvEula').checked;
+    $('#srvStart').disabled = busy || srv.state === 'running' || !srv.build;
+    $('#srvStop').disabled = srv.state !== 'running' && srv.state !== 'starting';
+    $('#srvAddr').textContent = srv.state === 'running' ? t('srv.addr', { port: srv.port ?? s.serverPort }) : '';
+    renderPlay();
+  }
+  function appendLog(lines) {
+    const pre = $('#srvLog'); const atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
+    srv.log.push(...lines); if (srv.log.length > 1500) srv.log.splice(0, srv.log.length - 1500);
+    pre.textContent = srv.log.join('\n');
+    if (atEnd) pre.scrollTop = pre.scrollHeight;
+  }
+  async function loadServerView() {
+    try { const r = await call(sir.myServer()); Object.assign(srv, { state: r.state, build: r.build, port: r.port }); srv.log = []; appendLog(r.log); } catch { /* not available */ }
+    renderServer();
+  }
+  sir.onServerLine?.((l) => appendLog([l]));
+  sir.onServerState?.((st) => { srv.state = st; if (st === 'stopped') loadServerView(); else renderServer(); });
+  $('#testMode').addEventListener('change', async (e) => { await save({ testMode: e.target.checked }); renderServer(); });
+  $('#testNick').addEventListener('change', async (e) => {
+    const v = e.target.value.trim();
+    if (v && !/^[A-Za-z0-9_]{3,16}$/.test(v)) { showError(Object.assign(new Error(t('srv.nick.bad')), { code: 'unknown' })); return; }
+    await save({ testNick: v }); renderServer();
+  });
+  $('#srvEula').addEventListener('change', renderServer);
+  $('#srvInstall').addEventListener('click', async () => {
+    srv.state = 'installing'; renderServer();
+    try { await call(sir.installMyServer($('#srvEula').checked)); state.settings.eulaAccepted = true; }
+    catch (e) { showError(e); }
+    finally { $('#progress').hidden = true; await loadServerView(); }
+  });
+  $('#srvStart').addEventListener('click', async () => { try { await call(sir.startMyServer()); } catch (e) { showError(e); } await loadServerView(); });
+  $('#srvStop').addEventListener('click', async () => { try { await call(sir.stopMyServer()); } catch (e) { showError(e); } });
+  $('#srvCmdForm').addEventListener('submit', async (e) => {
+    e.preventDefault(); const v = $('#srvCmd').value.trim(); if (!v) return;
+    $('#srvCmd').value = ''; await call(sir.serverCommand(v)).catch(showError);
+  });
+  $$('.rail__item[data-view="server"]').forEach((b) => b.addEventListener('click', loadServerView));
 
   // ---------- launcher update (asked on every start, never required) ----------
   let launcherUpd = null;

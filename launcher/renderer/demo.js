@@ -5,7 +5,8 @@
   document.documentElement.classList.add('demo');
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const ok = (data) => ({ ok: true, data });
-  const listeners = { progress: [], 'auth:code': [], session: [], game: [], 'launcher:progress': [] };
+  const listeners = { progress: [], 'auth:code': [], session: [], game: [], 'launcher:progress': [], 'server:line': [], 'server:state': [] };
+  const demoSrv = { state: 'not_installed', build: null, log: [] };
   const emit = (k, p) => listeners[k].forEach((f) => f(p));
   let session = { name: 'Ardent_Vex', uuid: '5c1f2a9e8d7b4c3aa1e0f9d8c7b6a5f4', skin: null };
   const settings = { installDir: 'C:\\Users\\Player\\AppData\\Roaming\\SpellAndIronRift', memoryMb: 6144, javaPath: null, jvmArgs: '', width: 1600, height: 900, fullscreen: false, preset: null, presetIsManual: false, language: 'ru', channel: 'stable', closeOnLaunch: false };
@@ -34,6 +35,13 @@
     serverStatus: async () => { await wait(300); return ok({ online: true, players: 137, maxPlayers: 300, motd: 'Spell and Iron Rift', latencyMs: 34, checkedAt: new Date().toISOString() }); },
     news: async () => { await wait(200); return ok(news[settings.language] || news.ru); },
     detectHardware: async () => ok({ hardware: { cpuModel: 'AMD Ryzen 7 5800X 8-Core Processor', cpuThreads: 16, totalRamMb: 16384, gpuName: 'NVIDIA GeForce RTX 3060', gpuVendor: 'nvidia', vramMb: 12288, glVersion: 4.6 }, recommended: { preset: 'high', reasons: ['mid_range_discrete'] }, recommendedHeapMb: 6144 }),
+    myServer: async () => ok({ state: demoSrv.state, build: demoSrv.build, log: demoSrv.log, port: 25565 }),
+    installMyServer: async () => { demoSrv.state = 'installing'; for (let i = 1; i <= 10; i++) { await wait(120); emit('progress', { stage: 'server', done: i, total: 10 }); } demoSrv.build = 'b-0008'; demoSrv.state = 'stopped'; return ok(true); },
+    startMyServer: async () => { demoSrv.state = 'starting'; emit('server:state', 'starting'); for (const l of ['[Server thread/INFO]: Starting minecraft server version 1.21.1', '[Server thread/INFO]: Loading 64 mods', '[Server thread/INFO]: Preparing level "world"', '[Server thread/INFO]: Done (8.412s)! For help, type "help"']) { await wait(500); demoSrv.log.push(l); emit('server:line', l); } demoSrv.state = 'running'; emit('server:state', 'running'); return ok(true); },
+    stopMyServer: async () => { demoSrv.state = 'stopping'; emit('server:state', 'stopping'); await wait(800); demoSrv.state = 'stopped'; emit('server:state', 'stopped'); return ok(true); },
+    serverCommand: async (c) => { const l = c === 'list' ? '[Server thread/INFO]: There are 0 of a max of 20 players online:' : `[Server thread/INFO]: Unknown or incomplete command: ${c}`; demoSrv.log.push(`> ${c}`, l); emit('server:line', `> ${c}`); emit('server:line', l); return ok(true); },
+    onServerLine: (f) => (listeners['server:line'].push(f), () => {}),
+    onServerState: (f) => (listeners['server:state'].push(f), () => {}),
     checkLauncherUpdate: async () => { await wait(600); return ok({ current: '0.1.0', version: '0.2.0', size: 92_400_000, publishedAt: new Date().toISOString(), notes: '• Новое главное меню в игре: разлом и полёт в него при входе\n• Иконка и логотип в новом стиле\n• Лаунчер сам предлагает обновиться' }); },
     installLauncherUpdate: async () => { for (let i = 1; i <= 20; i++) { await wait(90); emit('launcher:progress', { done: i * 4_620_000, total: 92_400_000 }); } return ok('opened'); },
     cancelLauncherUpdate: async () => ok(true),

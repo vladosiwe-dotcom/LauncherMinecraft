@@ -61,10 +61,11 @@ export class GameManager {
 
   /** Settings the in-game mod reads (server address, language, preset). Contains no secrets. */
   private async writeClientConfig(m: BuildManifest, preset: GraphicsPresetId) {
+    const server = this.settings.testMode ? { host: '127.0.0.1', port: this.settings.serverPort } : m.server;
     const dir = join(this.gameDir, 'spellironrift');
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(join(dir, 'launcher.json'), JSON.stringify({
-      server: m.server, apiBase: this.apiBase, language: this.settings.language, preset, buildVersion: m.version, buildId: m.buildId,
+      server, offline: this.settings.testMode, apiBase: this.apiBase, language: this.settings.language, preset, buildVersion: m.version, buildId: m.buildId,
     }, null, 2));
     const optPath = join(this.gameDir, 'options.txt');
     const current = await fs.readFile(optPath, 'utf8').catch(() => '');

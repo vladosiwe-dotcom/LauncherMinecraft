@@ -18,6 +18,12 @@ export interface LauncherSettings {
   language: Language;
   channel: 'stable' | 'testing';
   closeOnLaunch: boolean;
+  /** Test mode: play with a nickname on a server on this PC or local network (no Microsoft account). */
+  testMode: boolean;
+  testNick: string;
+  serverPort: number;
+  serverMemoryMb: number;
+  eulaAccepted: boolean;
 }
 
 export function defaultSettings(baseDir: string, ramMb: number): LauncherSettings {
@@ -26,6 +32,7 @@ export function defaultSettings(baseDir: string, ramMb: number): LauncherSetting
     memoryMb: ramMb >= 16000 ? 6144 : ramMb >= 8000 ? 4096 : 3072,
     javaPath: null, jvmArgs: '', width: 1600, height: 900, fullscreen: false,
     preset: null, presetIsManual: false, language: 'ru', channel: 'stable', closeOnLaunch: false,
+    testMode: false, testNick: '', serverPort: 25565, serverMemoryMb: ramMb >= 16000 ? 6144 : 4096, eulaAccepted: false,
   };
 }
 
@@ -37,6 +44,9 @@ export function validateSettings(s: Partial<LauncherSettings>, totalRamMb: numbe
   if (s.language !== undefined && !['ru', 'uk', 'en'].includes(s.language)) errs.push('language');
   if (s.preset !== undefined && s.preset !== null && !['minimal', 'balanced', 'high', 'ultra'].includes(s.preset)) errs.push('preset');
   if (s.channel !== undefined && !['stable', 'testing'].includes(s.channel)) errs.push('channel');
+  if (s.testNick !== undefined && s.testNick !== '' && !/^[A-Za-z0-9_]{3,16}$/.test(s.testNick)) errs.push('testNick');
+  if (s.serverPort !== undefined && (!Number.isInteger(s.serverPort) || s.serverPort < 1024 || s.serverPort > 65535)) errs.push('serverPort');
+  if (s.serverMemoryMb !== undefined && (s.serverMemoryMb < 2048 || s.serverMemoryMb > Math.max(2048, totalRamMb - 2048))) errs.push('serverMemoryMb');
   return errs;
 }
 
