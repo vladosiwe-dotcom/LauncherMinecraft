@@ -54,6 +54,9 @@ public final class RiftScene {
     private final List<float[]> motes = new ArrayList<>(); // x, y, vx, vy, life, max, colour, size, pull
     private final List<float[]> arcs = new ArrayList<>();  // life, then x/y pairs
     private float nextArc = 1.5f;
+    private final List<float[]> pulses = new ArrayList<>(); // age
+    private float lastBreathPhase;
+    private static final float BREATH_PERIOD = 5f;
     private final Random rnd = new Random();
 
     // tunnel
@@ -182,8 +185,14 @@ public final class RiftScene {
         int x0 = (W - 854) / 2;
         g.blit(BACKDROP, x0, 0, 854, H, 0f, 0f, 427, 180, 427, 180);
         g.pose().popPose();
+        // colour wash: deep indigo above, violet around the rift, a magenta haze along the horizon
+        float glowP = 0.55f + 0.45f * power;
+        int wash = Math.round(glowP * 255);
+        g.fillGradient(0, 0, width, height * 11 / 20, ((wash * 0x46 / 255) << 24) | 0x1A0F55, ((wash * 0x50 / 255) << 24) | 0x4A1E9C);
+        g.fillGradient(0, height * 11 / 20, width, height * 8 / 10, ((wash * 0x50 / 255) << 24) | 0x4A1E9C, ((wash * 0x48 / 255) << 24) | 0x9C2E8E);
+        g.fillGradient(0, height * 8 / 10, width, height, ((wash * 0x48 / 255) << 24) | 0x9C2E8E, 0x00000000);
         // vignette: darker edges and bottom so the interface reads on top
-        g.fillGradient(0, 0, width, height / 4, 0x8C050409, 0x00050409);
+        g.fillGradient(0, 0, width, height / 4, 0x60050409, 0x00050409);
         g.fillGradient(0, height * 7 / 10, width, height, 0x00050409, 0xCC050409);
     }
 
@@ -211,21 +220,45 @@ public final class RiftScene {
         return ptX[i] + (ptX[i + 1] - ptX[i]) * (f - i);
     }
 
+    /** The rift breathes: -1 drawn in, 1 wide open, one breath every 5 s. */
+    public float breathWave() {
+        return reduceMotion() ? 0 : (float) Math.sin(time * (Math.PI * 2 / BREATH_PERIOD));
+    }
+
+    /** Width factor of the opening: it closes in to 0.84 and opens out to 1.22. */
+    private float breath() {
+        float w = breathWave();
+        return 1 + (w > 0 ? 0.22f : 0.16f) * w;
+    }
+
     public float intensity() {
-        float breath = reduceMotion() ? 1 : 0.92f + 0.08f * (float) Math.sin(time * 1.6);
+        float breath = 0.9f + 0.14f * breathWave();
         return (0.35f + 0.65f * power) * breath * (1 + 0.3f * pull) * (1 + boost);
+    }
+
+    /** A thin ellipse outline (additive batch). */
+    private static void ellipse(BufferBuilder b, Matrix4f m, float cx, float cy, float rx, float ry, float width, int argb) {
+        int n = 56;
+        float[] xs = new float[n + 1], ys = new float[n + 1];
+        for (int i = 0; i <= n; i++) {
+            double a = i * Math.PI * 2 / n;
+            xs[i] = cx + (float) Math.cos(a) * rx;
+            ys[i] = cy + (float) Math.sin(a) * ry;
+        }
+        polyline(b, m, xs, ys, n + 1, width, argb);
     }
 
     /** Rift, light and motes in stage space (the caller has pushed {@link #pushStage}). */
     public void renderRift(GuiGraphics g) {
         boolean calm = reduceMotion();
-        float p = power, breath = calm ? 1 : 0.92f + 0.08f * (float) Math.sin(time * 1.6);
+        float p = power, breath = breath();
         float I = intensity();
         float open = (0.3f + 0.7f * p) * breath * (1 + 0.25f * pull) * (1 + 1.1f * boost);
         int cv = mix(SEALED_V, OPEN_V, p), ca = mix(SEALED_A, OPEN_A, p), cc = mix(SEALED_C, OPEN_C, p);
         float cx = W / 2f;
 
-        glow(g, cx, 150, 230, 230, cv, 0.22f * I);
+        glow(g, cx, 150, 300, 260, cv, 0.30f * I);
+        glow(g, cx, 140, 150, 190, ca, 0.10f * I);
         glow(g, cx, FEET, 110, 18, ca, 0.5f * I);
         glow(g, cx, FEET, 70, 10, cv, 0.35f * I);
 
@@ -258,6 +291,25 @@ public final class RiftScene {
         polyline(b, m, lx, ly, 19, 5, argb(cv, 0.22f * I)); polyline(b, m, rx, ry, 19, 5, argb(cv, 0.22f * I));
         polyline(b, m, lx, ly, 19, 2.2f, argb(ca, 0.5f * I)); polyline(b, m, rx, ry, 19, 2.2f, argb(ca, 0.5f * I));
         polyline(b, m, lx, ly, 19, 0.8f, argb(cc, 0.95f * Math.min(1, I))); polyline(b, m, rx, ry, 19, 0.8f, argb(cc, 0.95f * Math.min(1, I)));
+
+        // every full breath sends a wave out: a ring around the tear and one along the ground, with a burst of motes
+        float phase = (time / BREATH_PERIOD) % 1f;
+        if (!calm && p > 0.5f && phase >= 0.25f && lastBreathPhase < 0.25f) {
+            pulses.add(new float[]{0});
+            for (int k = 0; k < 14; k++) spawnMote(p);
+        }
+        lastBreathPhase = phase;
+        for (Iterator<float[]> it = pulses.iterator(); it.hasNext(); ) {
+            float[] pu = it.next();
+            pu[0] += dt;
+            float k = pu[0] / 1.8f;
+            if (k >= 1) { it.remove(); continue; }
+            float fade = (1 - k) * (1 - k), r = ease(k);
+            ellipse(b, m, cx, 150, 16 + 95 * r, 60 + 150 * r, 3.5f, argb(cv, 0.10f * fade * p));
+            ellipse(b, m, cx, 150, 16 + 95 * r, 60 + 150 * r, 1.1f, argb(ca, 0.45f * fade * p));
+            ellipse(b, m, cx, FEET, 12 + 190 * k, (12 + 190 * k) * 0.14f, 2.5f, argb(cv, 0.14f * fade * p));
+            ellipse(b, m, cx, FEET, 12 + 190 * k, (12 + 190 * k) * 0.14f, 0.9f, argb(cc, 0.5f * fade * p));
+        }
 
         // short arcs of energy leaving the edge while the rift is open
         nextArc -= dt;
