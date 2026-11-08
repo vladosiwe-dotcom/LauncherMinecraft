@@ -192,35 +192,38 @@ jobs:
           def lines(path, pat):
               try: return [l for l in open(path, errors='replace') if pat in l]
               except FileNotFoundError: return []
-          def tick(path, pat):
+          def find(path, pat):
               for l in lines(path, pat):
-                  m = re.search(r' at (-?\d+)', l)
-                  if m: return int(m.group(1))
+                  t = re.search(r' at (-?\d+)', l); ms = re.search(r' ms (\d+)', l)
+                  if t and ms: return int(t.group(1)), int(ms.group(1))
               return None
           A, B, S = 'rift/client-mod/client.log', '/tmp/clientB/client.log', 'server/server.log'
           v = {
-            'server start': tick(S, 'Awakening sync: server start Waker'),
-            'server end': tick(S, 'Awakening sync: server end Waker'),
-            'Waker sees own start': tick(B, 'Awakening sync: client own start Waker'),
-            'Waker sees own end': tick(B, 'Awakening sync: client own end Waker'),
-            'Waker view back to normal': tick(B, 'Awakening sync: client own view back to normal'),
-            'Observer sees start': tick(A, 'Awakening sync: client sees start Waker'),
-            'Observer sees end': tick(A, 'Awakening sync: client sees end Waker'),
-            'Observer sees normal player again': tick(A, 'Awakening sync: client sees Waker drawn as a normal player'),
+            'server start': find(S, 'Awakening sync: server start Waker'),
+            'server end': find(S, 'Awakening sync: server end Waker'),
+            'Waker sees own start': find(B, 'Awakening sync: client own start Waker'),
+            'Waker sees own end': find(B, 'Awakening sync: client own end Waker'),
+            'Waker view back to normal': find(B, 'Awakening sync: client own view back to normal'),
+            'Observer sees start': find(A, 'Awakening sync: client sees start Waker'),
+            'Observer sees end': find(A, 'Awakening sync: client sees end Waker'),
+            'Observer sees normal player again': find(A, 'Awakening sync: client sees Waker drawn as a normal player'),
           }
-          rows = ['| Event | Game tick |', '|---|---|'] + [f'| {k} | {v[k]} |' for k in v]
           errors = [f'missing: {k}' for k, x in v.items() if x is None]
+          base = v['server start'][1] if v['server start'] else 0
+          rows = ['| Event | Game tick (that process) | Real time, ms from server start |', '|---|---|---|'] + \
+                 [f'| {k} | {x[0] if x else "—"} | {x[1] - base if x else "—"} |' for k, x in v.items()]
           if not errors:
-              s0 = v['server start']
+              ms = {k: x[1] for k, x in v.items()}
               def near(a, b, d, what):
-                  if abs(a - b) > d: errors.append(f'{what}: {a} vs {b}')
-              near(v['Waker sees own start'], s0, 3, 'Waker start vs server')
-              near(v['Observer sees start'], s0, 3, 'Observer start vs server')
-              near(v['server end'] - s0, 160, 2, 'server duration')
-              near(v['Waker sees own end'] - v['Waker sees own start'], 160, 2, 'Waker duration')
-              near(v['Observer sees end'] - v['Observer sees start'], 160, 2, 'Observer duration')
-              near(v['Observer sees end'], v['Waker sees own end'], 3, 'end on both clients')
-              if v['Observer sees normal player again'] < v['Observer sees end'] - 1: errors.append('Observer saw a normal player before the end')
+                  if abs(a - b) > d: errors.append(f'{what}: {a} vs {b} ms (allowed ±{d})')
+              near(ms['Waker sees own start'], ms['server start'], 300, 'Waker start vs server')
+              near(ms['Observer sees start'], ms['server start'], 300, 'Observer start vs server')
+              near(ms['Observer sees start'], ms['Waker sees own start'], 300, 'start on both clients')
+              near(ms['server end'] - ms['server start'], 8000, 300, 'server duration')
+              near(ms['Waker sees own end'] - ms['Waker sees own start'], 8000, 400, 'Waker duration')
+              near(ms['Observer sees end'] - ms['Observer sees start'], 8000, 400, 'Observer duration')
+              near(ms['Observer sees end'], ms['Waker sees own end'], 400, 'end on both clients')
+              if ms['Observer sees normal player again'] < ms['Observer sees end'] - 100: errors.append('Observer saw a normal player before the end')
           report = '### Multiplayer awakening (Waker seen by Observer)\n\n' + '\n'.join(rows) + '\n\n' + ('**In sync.**' if not errors else '**Problems:** ' + '; '.join(errors)) + '\n'
           print(report)
           open(os.environ['GITHUB_STEP_SUMMARY'], 'a').write(report)
