@@ -166,6 +166,7 @@ jobs:
             cp mods-client/*.jar $RUN/mods/ 2>/dev/null || true
             cp solo/build/libs/*.jar openace/build/libs/*.jar $RUN/mods/
             cp rift/tools/e2e/options.txt $RUN/options.txt
+            mkdir -p $RUN/config && printf '[voice]\n\tmode = "OFF"\n' > $RUN/config/solostatus-client.toml  # no microphone on CI
             echo '{"server":{"host":"127.0.0.1","port":25565},"apiBase":"","preset":"balanced","buildVersion":"e2e"}' > $RUN/spellironrift/launcher.json
           done
           # The Observer's game writes everything it plays into a WAV file (OpenAL Soft's "wave" output), with
