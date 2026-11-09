@@ -123,18 +123,21 @@ public final class EndToEndTest {
         var inv = mc.player.getInventory();
         switch (k) {
             case 0 -> {
-                for (String c : new String[]{"gamemode survival", "clear", "give @s minecraft:oak_planks 32", "give @s minecraft:iron_sword",
+                for (String c : new String[]{"gamerule sendCommandFeedback false", "gamerule doMobSpawning false", "kill @e[type=!minecraft:player]",
+                        "gamemode survival", "clear", "give @s minecraft:oak_planks 32", "give @s minecraft:iron_sword",
                         "tp @s ~ ~ ~ ~180 0", "time set noon", "weather clear", "effect give @s minecraft:resistance 120 4 true"})
                     mc.player.connection.sendCommand(c);
                 inv.selected = 0;
                 mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
             }
-            case 20 -> mc.player.connection.sendCommand("summon minecraft:husk ^ ^ ^3 {NoAI:1b,PersistenceRequired:1b}");
+            // a still training dummy that does not die from a few blows
+            case 20 -> mc.player.connection.sendCommand("summon minecraft:husk ^ ^ ^2.6 {NoAI:1b,PersistenceRequired:1b,Health:400f,"
+                    + "attributes:[{id:\"minecraft:generic.max_health\",base:400d}]}");
+            case 30 -> mc.gui.getChat().clearMessages(false);
             case 40 -> { recording = true; RiftClientMod.LOG.info("E2E: Epic Fight clip: holding {}", inv.getSelected().getHoverName().getString()); }
             case 110 -> { inv.selected = 1; RiftClientMod.LOG.info("E2E: Epic Fight clip: took the sword"); }
             case 270 -> {
                 mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
-                mc.player.connection.sendCommand("summon minecraft:husk ^ ^ ^3 {NoAI:1b,PersistenceRequired:1b}");
                 RiftClientMod.LOG.info("E2E: Epic Fight clip: third person");
             }
             case 410 -> { inv.selected = 0; RiftClientMod.LOG.info("E2E: Epic Fight clip: back to the planks"); }
