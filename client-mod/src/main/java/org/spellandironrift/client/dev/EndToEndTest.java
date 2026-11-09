@@ -23,6 +23,11 @@ public final class EndToEndTest {
     private static final boolean ON = "1".equals(System.getenv("RIFT_E2E"));
     /** Two-player run: this client stays in the world until another player has joined and finished awakening. */
     private static final boolean WAIT_PLAYER = "1".equals(System.getenv("RIFT_E2E_WAIT_PLAYER"));
+    /** Film a short Epic Fight clip at the end: tool in hand (vanilla mode), weapon (battle mode), both camera views. */
+    private static final boolean EPIC = "1".equals(System.getenv("RIFT_E2E_EPIC"));
+    private static int epicTick, epicFrame;
+    private static boolean recording;
+    private static int attackRelease = -1;
     private static long otherSeenAt;
     private static final long STARTED = System.currentTimeMillis();
     private static int stage;
@@ -87,7 +92,8 @@ public final class EndToEndTest {
             case 5 -> { if (t > 350) { shot("4-arrival"); next("arrival light"); } }
             case 6 -> { if (readyToLeave(mc, t)) { shot("5-world"); openSystemWindow(mc); next("opened the System window"); } }
             case 7 -> { if (t > 2500) { shot("6-system"); mc.setScreen(null); next("closed the System window"); } }
-            case 8 -> {
+            case 8 -> { if (!EPIC || epicClip(mc)) next(EPIC ? "Epic Fight clip recorded" : "no Epic Fight clip"); }
+            case 9 -> {
                 if (t > 1500) {
                     RiftClientMod.LOG.info("E2E: passed");
                     stage = 99;
@@ -108,6 +114,52 @@ public final class EndToEndTest {
         }
         if (otherSeenAt == 0 && t > 15 * 60_000L) fail("the second player never came");
         return otherSeenAt > 0 && System.currentTimeMillis() - otherSeenAt > 18000;
+    }
+
+    /** One step of the Epic Fight clip per client tick; true when it is finished. Needs operator rights on the server. */
+    private static boolean epicClip(Minecraft mc) {
+        if (mc.player == null) return true;
+        int k = epicTick++;
+        var inv = mc.player.getInventory();
+        switch (k) {
+            case 0 -> {
+                for (String c : new String[]{"gamemode survival", "clear", "give @s minecraft:oak_planks 32", "give @s minecraft:iron_sword",
+                        "tp @s ~ ~ ~ ~180 0", "time set noon", "weather clear", "effect give @s minecraft:resistance 120 4 true"})
+                    mc.player.connection.sendCommand(c);
+                inv.selected = 0;
+                mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+            }
+            case 20 -> mc.player.connection.sendCommand("summon minecraft:husk ^ ^ ^3 {NoAI:1b,PersistenceRequired:1b}");
+            case 40 -> { recording = true; RiftClientMod.LOG.info("E2E: Epic Fight clip: holding {}", inv.getSelected().getHoverName().getString()); }
+            case 110 -> { inv.selected = 1; RiftClientMod.LOG.info("E2E: Epic Fight clip: took the sword"); }
+            case 270 -> {
+                mc.options.setCameraType(net.minecraft.client.CameraType.THIRD_PERSON_BACK);
+                mc.player.connection.sendCommand("summon minecraft:husk ^ ^ ^3 {NoAI:1b,PersistenceRequired:1b}");
+                RiftClientMod.LOG.info("E2E: Epic Fight clip: third person");
+            }
+            case 410 -> { inv.selected = 0; RiftClientMod.LOG.info("E2E: Epic Fight clip: back to the planks"); }
+            case 450 -> mc.options.setCameraType(net.minecraft.client.CameraType.FIRST_PERSON);
+            case 480 -> { recording = false; return true; }
+            default -> { }
+        }
+        // swings: two with the planks, then a steady rhythm with the sword in both views
+        boolean swing = k == 60 || k == 85 || (k >= 140 && k <= 260 && (k - 140) % 14 == 0) || (k >= 290 && k <= 400 && (k - 290) % 14 == 0) || k == 425;
+        var attack = mc.options.keyAttack;
+        if (swing) {
+            net.minecraft.client.KeyMapping.set(attack.getKey(), true);
+            net.minecraft.client.KeyMapping.click(attack.getKey());
+            attackRelease = k + 2;
+        } else if (k == attackRelease) {
+            net.minecraft.client.KeyMapping.set(attack.getKey(), false);
+        }
+        if (recording) {
+            var img = Screenshot.takeScreenshot(mc.getMainRenderTarget());
+            java.io.File out = new java.io.File(mc.gameDirectory, String.format("screenshots/epic-%03d.png", epicFrame++));
+            net.minecraft.Util.ioPool().execute(() -> {
+                try (img) { out.getParentFile().mkdirs(); img.writeToFile(out); } catch (Exception e) { RiftClientMod.LOG.warn("E2E: frame {}", e.toString()); }
+            });
+        }
+        return false;
     }
 
     private static void fail(String why) {

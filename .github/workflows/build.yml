@@ -138,7 +138,10 @@ jobs:
           (cd server && java -jar ../installer.jar --installServer . > install.log 2>&1)
           echo "eula=true" > server/eula.txt
           cp rift/tools/e2e/server.properties server/server.properties
-          echo "-Xmx3G" > server/user_jvm_args.txt
+          printf -- '-Xmx3G\n-Dsolostatus.logEpicFightMode=true\n' > server/user_jvm_args.txt
+          # the Observer films an Epic Fight clip with a few commands (give, summon): make it an operator
+          python3 -c "import hashlib,uuid,json; b=bytearray(hashlib.md5(b'OfflinePlayer:Observer').digest()); b[6]=(b[6]&0x0f)|0x30; b[8]=(b[8]&0x3f)|0x80; json.dump([{'uuid':str(uuid.UUID(bytes=bytes(b))),'name':'Observer','level':4,'bypassesPlayerLimit':False}], open('server/ops.json','w'))"
+          cat server/ops.json
           cp mods-server/*.jar server/mods/ 2>/dev/null || true
           cp solo/build/libs/*.jar openace/build/libs/*.jar server/mods/
           ls server/mods
@@ -177,7 +180,7 @@ jobs:
         run: |
           set +e
           A=$PWD/rift/client-mod; B=/tmp/clientB
-          (cd $A && ALSOFT_CONF=/tmp/alsoft.conf ALSOFT_DRIVERS=wave RIFT_E2E_WAIT_PLAYER=1 timeout 1800 xvfb-run -n 91 -s "-screen 0 1920x1080x24" ./gradlew runClient --no-daemon -Pe2eUser=Observer -Pe2eSize=1920x1080 > client.log 2>&1) &
+          (cd $A && ALSOFT_CONF=/tmp/alsoft.conf ALSOFT_DRIVERS=wave RIFT_E2E_WAIT_PLAYER=1 RIFT_E2E_EPIC=1 timeout 1800 xvfb-run -n 91 -s "-screen 0 1920x1080x24" ./gradlew runClient --no-daemon -Pe2eUser=Observer -Pe2eSize=1920x1080 > client.log 2>&1) &
           PA=$!
           for i in $(seq 1 600); do grep -q "E2E: in the world" $A/client.log 2>/dev/null && break; kill -0 $PA 2>/dev/null || break; sleep 2; done
           grep -q "E2E: in the world" $A/client.log || { echo "::error::Observer did not get into the world"; tail -80 $A/client.log; exit 1; }
@@ -288,8 +291,9 @@ jobs:
           video $A awakening-o observer-sees-waker.mp4
           video $B awakening-v waker-first-person.mp4
           video $A awakening-v observer-own-entry.mp4
+          video $A epic epic-fight.mp4
           for C in $A $B; do n=$(basename $(dirname $C/run))-$(basename $C); grep -E "Awakening|E2E:|Epic Fight:" $C/client.log > /tmp/frames/log-$(basename $C).txt || true; done
-          grep -E "Awakening|joined the game|left the game|Exception" server/server.log | head -60 > /tmp/frames/server-log.txt || true
+          grep -E "Awakening|joined the game|left the game|Exception|Epic Fight: .* mode" server/server.log | head -60 > /tmp/frames/server-log.txt || true
           for C in $A $B; do for f in $C/run/screenshots/e2e-*.png; do [ -f "$f" ] && cp "$f" /tmp/frames/$(basename $C)-$(basename $f); done; done
           ls -la /tmp/frames
           cd /tmp/frames && git init -q && git checkout -q -b e2e-frames && git add .
