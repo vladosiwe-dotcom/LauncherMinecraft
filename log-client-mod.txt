@@ -1,0 +1,38 @@
+[13:17:12] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: анимации навыков подключены
+[13:17:12] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: боевой режим включается только с оружием в руке
+[13:17:12] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: уклонения и парирования засчитываются в прогресс системы
+[13:17:18] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: first-person body model turned off (ingame.first_person_model in epicfight-client.toml)
+[13:17:23] [Render thread/INFO] [SpellAndIronRift/]: E2E: menu shown, server online
+[13:17:23] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 1-menu
+[13:17:24] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 1b-menu-enter-focus
+[13:17:26] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 1c-menu-row-focus
+[13:17:33] [Render thread/INFO] [SpellAndIronRift/]: E2E: menu music playing
+[13:17:33] [Render thread/INFO] [SpellAndIronRift/]: E2E: pressed Enter the Rift
+[13:17:35] [Render thread/INFO] [SpellAndIronRift/]: E2E: camera dive
+[13:17:35] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 2-dive
+[13:17:37] [Render thread/INFO] [SpellAndIronRift/]: E2E: connected before the tunnel picture
+[13:17:38] [Render thread/INFO] [SpellAndIronRift/]: E2E: in the world as Observer
+[13:17:39] [Render thread/INFO] [SpellAndIronRift/]: E2E: arrival light
+[13:17:39] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 4-arrival
+[13:17:40] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client own start Observer at 1930 ms 1794575860229 (elapsed 0)
+[13:17:40] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: recording frames
+[13:17:40] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: drawn with GeckoLib (slim model, skin minecraft:textures/entity/player/slim/noor.png)
+[13:17:48] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client own end Observer at 2090 ms 1794575868186
+[13:17:48] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client own view back to normal at 2090 ms 1794575868191
+[13:17:49] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: recorded 188 frames
+[13:18:49] [Render thread/INFO] [SpellAndIronRift/]: E2E: another player is here
+[13:18:53] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client sees start Waker at 3400 ms 1794575933705 (elapsed 0)
+[13:18:53] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: recording another player's awakening
+[13:19:01] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client sees end Waker at 3560 ms 1794575941659
+[13:19:01] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client sees Waker drawn as a normal player at 3560 ms 1794575941672
+[13:19:03] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: recorded 188 frames of another player's awakening
+[13:19:07] [Render thread/INFO] [SpellAndIronRift/]: E2E: opened the System window
+[13:19:07] [IO-Worker-8/INFO] [SpellAndIronRift/]: E2E: screenshot 5-world
+[13:19:10] [Render thread/INFO] [SpellAndIronRift/]: E2E: closed the System window
+[13:19:10] [IO-Worker-8/INFO] [SpellAndIronRift/]: E2E: screenshot 6-system
+[13:19:12] [Render thread/INFO] [SpellAndIronRift/]: E2E: Epic Fight clip: holding Дубовые доски
+[13:19:15] [Render thread/INFO] [SpellAndIronRift/]: E2E: Epic Fight clip: took the sword
+[13:19:23] [Render thread/INFO] [SpellAndIronRift/]: E2E: Epic Fight clip: third person
+[13:19:30] [Render thread/INFO] [SpellAndIronRift/]: E2E: Epic Fight clip: back to the planks
+[13:19:34] [Render thread/INFO] [SpellAndIronRift/]: E2E: Epic Fight clip recorded
+[13:19:35] [Render thread/INFO] [SpellAndIronRift/]: E2E: passed

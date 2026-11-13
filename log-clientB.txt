@@ -1,0 +1,28 @@
+[13:18:24] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: анимации навыков подключены
+[13:18:24] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: боевой режим включается только с оружием в руке
+[13:18:24] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: уклонения и парирования засчитываются в прогресс системы
+[13:18:32] [Render thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: first-person body model turned off (ingame.first_person_model in epicfight-client.toml)
+[13:18:37] [Render thread/INFO] [SpellAndIronRift/]: E2E: menu shown, server online
+[13:18:37] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 1-menu
+[13:18:38] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 1b-menu-enter-focus
+[13:18:40] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 1c-menu-row-focus
+[13:18:47] [Render thread/INFO] [SpellAndIronRift/]: E2E: menu music NOT playing
+[13:18:47] [Render thread/INFO] [SpellAndIronRift/]: E2E: pressed Enter the Rift
+[13:18:51] [Render thread/INFO] [SpellAndIronRift/]: E2E: camera dive
+[13:18:51] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 2-dive
+[13:18:51] [Render thread/INFO] [SpellAndIronRift/]: E2E: connected before the tunnel picture
+[13:18:52] [Render thread/INFO] [SpellAndIronRift/]: E2E: in the world as Waker
+[13:18:52] [Render thread/INFO] [SpellAndIronRift/]: E2E: arrival light
+[13:18:52] [IO-Worker-1/INFO] [SpellAndIronRift/]: E2E: screenshot 4-arrival
+[13:18:53] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client own start Waker at 3400 ms 1794575933698 (elapsed 0)
+[13:18:53] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: drawn with GeckoLib (wide model, skin minecraft:textures/entity/player/wide/zuri.png)
+[13:18:53] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: recording frames
+[13:19:01] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client own end Waker at 3560 ms 1794575941664
+[13:19:01] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: client own view back to normal at 3560 ms 1794575941665
+[13:19:03] [Render thread/INFO] [co.vl.op.OpenAce/]: Awakening: recorded 188 frames
+[13:19:05] [Render thread/INFO] [SpellAndIronRift/]: E2E: opened the System window
+[13:19:05] [IO-Worker-3/INFO] [SpellAndIronRift/]: E2E: screenshot 5-world
+[13:19:08] [Render thread/INFO] [SpellAndIronRift/]: E2E: closed the System window
+[13:19:08] [IO-Worker-3/INFO] [SpellAndIronRift/]: E2E: screenshot 6-system
+[13:19:08] [Render thread/INFO] [SpellAndIronRift/]: E2E: no Epic Fight clip
+[13:19:09] [Render thread/INFO] [SpellAndIronRift/]: E2E: passed
