@@ -110,7 +110,8 @@ jobs:
           path: rift
       - uses: actions/checkout@v4
         with:
-          ref: claude/skills-connection-7u72hg
+          repository: vladosiwe-dotcom/SoloStatus
+          ref: main
           path: solo
       # the awakening scene on joining lives in its own mod
       - uses: actions/checkout@v4
