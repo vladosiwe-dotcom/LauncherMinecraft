@@ -548,6 +548,35 @@
   };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#updateModal').hidden && !updBusy) $('#updateModal').hidden = true; });
 
+  // ---------- owner mode: build server + admin panel on this PC ----------
+  const own = { st: null, msg: '' };
+  function renderOwner() {
+    const st = own.st; if (!st) return;
+    $('#ownerMode').checked = !!st.enabled;
+    const p = $('#ownerPill'); p.className = `pill ${st.running ? 'is-ok' : ''}`; p.textContent = t(st.running ? 'own.running' : 'own.off');
+    $('#ownerBody').hidden = !st.running;
+    $('#ownerCreate').hidden = !st.running || st.hasOwner;
+    $('#ownerPanel').disabled = !st.hasOwner;
+    $('#ownerInfo').textContent = st.running ? `${t('own.info', { url: st.url, key: st.keyId })}${own.msg ? ` · ${own.msg}` : ''}` : '';
+  }
+  async function loadOwner() { try { own.st = await call(sir.ownerState()); } catch { own.st = null; } renderOwner(); }
+  $('#ownerMode').addEventListener('change', async (e) => {
+    e.target.disabled = true;
+    try { own.st = await call(e.target.checked ? sir.ownerEnable() : sir.ownerDisable()); await refreshFlags(); loadServer(); loadNews(); loadUpdate(); }
+    catch (err) { showError(err); await loadOwner(); }
+    finally { e.target.disabled = false; renderOwner(); }
+  });
+  $('#ownerCreate').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try { own.st = await call(sir.ownerCreate($('#ownerName').value, $('#ownerPass').value)); $('#ownerPass').value = ''; own.msg = t('own.created'); }
+    catch (err) { showError(err); }
+    renderOwner();
+  });
+  $('#ownerPanel').addEventListener('click', () => call(sir.ownerOpenPanel()).catch(showError));
+  $('#ownerRestart').addEventListener('click', async () => { try { own.st = await call(sir.ownerRestart()); } catch (e) { showError(e); } renderOwner(); });
+  $('#resetKey').addEventListener('click', async () => { try { await call(sir.resetKey()); loadUpdate(); } catch (e) { showError(e); } });
+  $$('.rail__item[data-view="server"]').forEach((b) => b.addEventListener('click', loadOwner));
+
   // ---------- connection settings ----------
   async function refreshFlags() {
     const st = await call(sir.state());

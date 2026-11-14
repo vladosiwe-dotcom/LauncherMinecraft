@@ -17,6 +17,8 @@ export interface Config {
   backupKeep: number;
   /** Mojang session server (account linking); overridable for tests. */
   sessionServer: string;
+  /** Admin panel and admin API only for requests made on this machine itself (not through a tunnel or proxy). */
+  adminLocalOnly: boolean;
 }
 
 export function loadConfig(env = process.env): Config {
@@ -34,5 +36,6 @@ export function loadConfig(env = process.env): Config {
     trustProxy: env.RIFT_TRUST_PROXY === '1',
     backupKeep: Number(env.RIFT_BACKUP_KEEP ?? 14),
     sessionServer: (env.RIFT_SESSION_SERVER ?? 'https://sessionserver.mojang.com').replace(/\/$/, ''),
+    adminLocalOnly: env.RIFT_ADMIN_LOCAL_ONLY === '1',
   };
 }

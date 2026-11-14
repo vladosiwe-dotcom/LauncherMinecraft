@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@sir/shared": "0.1.0",
-    "undici": "6.21.0"
+    "undici": "6.21.0",
+    "@sir/backend": "0.1.0"
   },
   "devDependencies": {
     "@fontsource/cormorant-sc": "^5.1.0",

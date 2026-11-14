@@ -14,12 +14,15 @@ mkdirSync(join(stage, 'vendor'), { recursive: true });
 
 for (const dir of ['dist', 'renderer', 'config', 'assets']) cpSync(join(launcher, dir), join(stage, dir), { recursive: true });
 
-// @sir/shared as a tarball, so npm installs a real folder (not a workspace link)
-execSync(`npm pack --pack-destination "${join(stage, 'vendor')}"`, { cwd: join(root, 'shared'), stdio: 'inherit' });
-const tgz = readdirSync(join(stage, 'vendor')).find((f) => f.endsWith('.tgz'));
+// @sir/shared and @sir/backend (the build server owners run inside the launcher) as tarballs,
+// so npm installs real folders (not workspace links)
+for (const ws of ['shared', 'backend']) execSync(`npm pack --pack-destination "${join(stage, 'vendor')}"`, { cwd: join(root, ws), stdio: 'inherit' });
+const tgzOf = (name) => readdirSync(join(stage, 'vendor')).find((f) => f.startsWith(`sir-${name}-`) && f.endsWith('.tgz'));
 
 const pkg = JSON.parse(readFileSync(join(launcher, 'package.json'), 'utf8'));
-pkg.dependencies = { ...pkg.dependencies, '@sir/shared': `file:./vendor/${tgz}` };
+pkg.dependencies = { ...pkg.dependencies, '@sir/shared': `file:./vendor/${tgzOf('shared')}`, '@sir/backend': `file:./vendor/${tgzOf('backend')}` };
+// the backend's own dependency on @sir/shared must also come from the tarball, not the npm registry
+pkg.overrides = { '@sir/shared': `file:./vendor/${tgzOf('shared')}` };
 pkg.devDependencies = { electron: pkg.build.electronVersion, 'electron-builder': pkg.devDependencies['electron-builder'] };
 delete pkg.scripts;
 pkg.build.files = ['dist/**', 'renderer/**', 'config/**', 'assets/**', 'package.json'];

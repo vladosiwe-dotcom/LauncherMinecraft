@@ -114,6 +114,24 @@
     <!-- SETTINGS -->
     <section class="view view--server" data-view="server">
       <header class="section-head"><h2 data-i18n="nav.server"></h2></header>
+      <div class="card owner-card" id="ownerCard">
+        <div class="card__head"><span class="eyebrow" data-i18n="own.title"></span><span class="pill" id="ownerPill"></span></div>
+        <p class="hint" data-i18n="own.d"></p>
+        <label class="switch"><input type="checkbox" id="ownerMode"><span></span><b data-i18n="own.on"></b></label>
+        <div id="ownerBody" hidden>
+          <form id="ownerCreate" class="owner-create" hidden>
+            <p class="hint" data-i18n="own.create.d"></p>
+            <div class="field"><label for="ownerName" data-i18n="own.name"></label><input type="text" id="ownerName" value="Rutaku" maxlength="32" autocomplete="username" spellcheck="false"></div>
+            <div class="field"><label for="ownerPass" data-i18n="own.pass"></label><input type="password" id="ownerPass" autocomplete="new-password"><p class="hint" data-i18n="own.pass.d"></p></div>
+            <button type="submit" class="btn btn--gold" data-i18n="own.create"></button>
+          </form>
+          <div class="srv-actions">
+            <button type="button" class="btn btn--gold" id="ownerPanel" data-i18n="own.panel"></button>
+            <button type="button" class="btn btn--ghost" id="ownerRestart" data-i18n="own.restart"></button>
+          </div>
+          <p class="hint mono" id="ownerInfo"></p>
+        </div>
+      </div>
       <div class="srv-grid">
         <div class="card srv-card">
           <div class="card__head"><span class="eyebrow" data-i18n="srv.test"></span><span class="pill" id="testPill"></span></div>
@@ -219,6 +237,8 @@
           <input type="url" id="apiBase" spellcheck="false" autocomplete="off" placeholder="https://rift.example.org">
           <p class="hint" data-i18n="conn.api.d"></p>
           <p class="hint" id="apiState"></p>
+          <button type="button" class="btn btn--ghost" id="resetKey" data-i18n="conn.resetKey"></button>
+          <p class="hint" data-i18n="conn.resetKey.d"></p>
         </div>
       </div>
 

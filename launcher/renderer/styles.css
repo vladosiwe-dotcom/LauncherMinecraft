@@ -403,3 +403,6 @@ input:focus, select:focus { border-color: var(--violet); outline: none; }
 .srv-stats__names { flex-basis: 100%; color: var(--text); }
 .srv-backups { display: grid; gap: 6px; }
 .srv-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--ink-1); border: 1px solid var(--iron-lo); font-size: 13px; }
+.owner-card { display: grid; gap: 12px; }
+.owner-create { display: grid; gap: 10px; max-width: 460px; }
+.owner-create input { padding: 9px 12px; background: var(--ink-0); color: var(--text); border: 1px solid var(--iron); font: inherit; }

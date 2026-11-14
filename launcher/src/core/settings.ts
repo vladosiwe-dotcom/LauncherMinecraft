@@ -29,6 +29,15 @@ export interface LauncherSettings {
   apiBase: string;
   /** Show snapshots in the Versions tab. */
   showSnapshots: boolean;
+  /** Owner mode: this PC hosts the build server and admin panel (embedded backend). */
+  ownerMode: boolean;
+  ownerPort: number;
+  /** Public address friends use for the build (Cloudflare Tunnel URL); download links are made from it. */
+  ownerPublicUrl: string;
+  /** Address friends use to join the game (playit.gg address or host:port). */
+  gameAddress: string;
+  /** Manifest signing key pinned on first contact with each build server (apiBase -> public PEM). */
+  pinnedKeys: Record<string, string>;
 }
 
 export function defaultSettings(baseDir: string, ramMb: number): LauncherSettings {
@@ -39,6 +48,7 @@ export function defaultSettings(baseDir: string, ramMb: number): LauncherSetting
     preset: null, presetIsManual: false, language: 'ru', channel: 'stable', closeOnLaunch: false,
     testMode: false, testNick: '', serverPort: 25565, serverMemoryMb: ramMb >= 16000 ? 6144 : 4096, eulaAccepted: false,
     azureClientId: '', apiBase: '', showSnapshots: false,
+    ownerMode: false, ownerPort: 8080, ownerPublicUrl: '', gameAddress: '', pinnedKeys: {},
   };
 }
 
@@ -54,6 +64,9 @@ export function validateSettings(s: Partial<LauncherSettings>, totalRamMb: numbe
   if (s.serverPort !== undefined && (!Number.isInteger(s.serverPort) || s.serverPort < 1024 || s.serverPort > 65535)) errs.push('serverPort');
   if (s.serverMemoryMb !== undefined && (s.serverMemoryMb < 2048 || s.serverMemoryMb > Math.max(2048, totalRamMb - 2048))) errs.push('serverMemoryMb');
   if (s.azureClientId !== undefined && s.azureClientId !== '' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.azureClientId)) errs.push('azureClientId');
+  if (s.ownerPort !== undefined && (!Number.isInteger(s.ownerPort) || s.ownerPort < 1024 || s.ownerPort > 65535)) errs.push('ownerPort');
+  if (s.ownerPublicUrl !== undefined && s.ownerPublicUrl !== '' && !/^https:\/\/[^\s/]+\/?$/.test(s.ownerPublicUrl)) errs.push('ownerPublicUrl');
+  if (s.gameAddress !== undefined && s.gameAddress !== '' && !/^[A-Za-z0-9.-]+(:\d{2,5})?$/.test(s.gameAddress)) errs.push('gameAddress');
   if (s.apiBase !== undefined && s.apiBase !== '' && !/^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(s.apiBase)) errs.push('apiBase');
   return errs;
 }

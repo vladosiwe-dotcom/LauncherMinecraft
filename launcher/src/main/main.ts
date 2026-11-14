@@ -6,7 +6,9 @@ import { GRAPHICS_PRESETS, recommendPreset, recommendHeapMb, type GraphicsPreset
 import { RiftApi } from '../core/api.js';
 import { AuthError, MicrosoftAuth, type MinecraftSession } from '../core/auth.js';
 import { GameManager } from '../core/game.js';
+import { fetchJson } from '../core/http.js';
 import { VersionLibrary } from '../core/versions.js';
+import { startEmbedded, type EmbeddedBackend } from '@sir/backend/embedded';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
 import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
@@ -68,9 +70,57 @@ async function loadRefreshToken(): Promise<string | null> {
 
 /** Values from Settings → Connection win over the built-in launcher/config/app.json. */
 const clientId = () => settings.azureClientId || config.azureClientId;
-const apiBase = () => settings.apiBase || config.apiBase;
+let owner: EmbeddedBackend | null = null;
+/** Owner mode: this launcher talks to the build server it runs itself; others use the address from settings. */
+const apiBase = () => (owner ? owner.url : settings.apiBase || config.apiBase);
+const isLoopback = (u: string) => { try { return ['127.0.0.1', 'localhost'].includes(new URL(u).hostname); } catch { return false; } };
+/** Plain http is allowed only to this PC (the embedded build server). */
+const insecureLocal = () => config.allowInsecureLocalApi || (!!owner && isLoopback(apiBase()));
+/** Built-in keys, our own key in owner mode, and the key pinned on first contact with the configured server. */
+function trustedKeys(): string[] {
+  const pinned = settings.pinnedKeys?.[apiBase()];
+  return [...config.trustedManifestKeys, ...(owner ? [owner.publicPem] : []), ...(pinned ? [pinned] : [])];
+}
+/** Trust on first use: the first manifest key a server shows is remembered; a later change is refused. */
+async function ensurePinned() {
+  if (owner || !backendConfigured() || settings.pinnedKeys?.[apiBase()] || config.trustedManifestKeys.length) return;
+  const k = await fetchJson<{ publicPem: string; keyId: string }>(`${apiBase()}/api/public/key`, { retries: 1, timeoutMs: 10000 });
+  if (!/^-----BEGIN PUBLIC KEY-----/.test(k.publicPem)) throw new Error('server returned no signing key');
+  settings.pinnedKeys = { ...(settings.pinnedKeys ?? {}), [apiBase()]: k.publicPem };
+  await settingsStore.save(settings);
+}
+async function signedManifest() {
+  await ensurePinned();
+  return api().manifest(settings.channel);
+}
+
+async function startOwner() {
+  if (owner) return owner;
+  owner = await startEmbedded({
+    dataDir: join(app.getPath('userData'), 'build-server'), port: settings.ownerPort,
+    publicBaseUrl: settings.ownerPublicUrl || `http://127.0.0.1:${settings.ownerPort}`,
+    mcHost: (settings.gameAddress || '127.0.0.1').split(':')[0]!, mcPort: Number((settings.gameAddress || '').split(':')[1] || settings.serverPort),
+  });
+  await log(`owner mode: build server on ${owner.url}, key ${owner.keyId}`);
+  return owner;
+}
+/** In owner mode the server's guard mod asks this PC's build server who may play (key shared locally). */
+async function writeGuardConfig() {
+  if (!owner) return;
+  const f = join(myServer().dir, 'config', 'spellironrift-guard.json');
+  let cur: Record<string, unknown> = {};
+  try { cur = JSON.parse(await fs.readFile(f, 'utf8')); } catch { /* first time */ }
+  await fs.mkdir(dirname(f), { recursive: true });
+  await fs.writeFile(f, JSON.stringify({ ...cur, apiBase: owner.url, serverKey: owner.serverKey }, null, 2));
+}
+async function stopOwner() { const o = owner; owner = null; await o?.close(); }
+async function ownerState() {
+  return { enabled: settings.ownerMode, running: !!owner, url: owner?.url ?? null, panel: owner ? `${owner.url}/admin/` : null,
+    keyId: owner?.keyId ?? null, hasOwner: owner ? await owner.hasOwner() : false, publicUrl: settings.ownerPublicUrl, gameAddress: settings.gameAddress, port: settings.ownerPort };
+}
 /** The built-in address is a placeholder until the project server is deployed. */
 function backendConfigured(): boolean {
+  if (owner) return true;
   try { const h = new URL(apiBase()).hostname; return !!h && !/(^|\.)example\.(org|com|net)$/.test(h); } catch { return false; }
 }
 function auth() { return new MicrosoftAuth(clientId()); }
@@ -116,6 +166,7 @@ function publicSession() {
 function errorPayload(e: unknown) {
   if (e instanceof RiftAccountError) return { code: `account.${e.code}`, message: e.reason ?? e.message };
   if (e instanceof AuthError) return { code: /client id is not configured/.test(e.message) ? 'auth.no_client' : `auth.${e.code}`, message: e.message };
+  for (const c of ['owner_name', 'owner_password', 'owner_exists']) if ((e as { code?: string })?.code === c) return { code: c, message: (e as Error).message };
   if ((e as { code?: string })?.code === 'no_backend') return { code: 'no_backend', message: (e as Error).message };
   if ((e as { code?: string })?.code === 'need_account') return { code: 'versions.need_account', message: (e as Error).message };
   const msg = (e as Error)?.message ?? String(e);
@@ -162,14 +213,14 @@ function testProfile() {
 
 function registerIpc() {
   handle('app:state', async () => {
-    const st = await new GameManager(settings, config.trustedManifestKeys).updater.loadState();
+    const st = await new GameManager(settings, trustedKeys()).updater.loadState();
     return { version: VERSION, settings, session: publicSession(), owner: await loadOwner(), backend: backendConfigured(), clientIdSet: /^[0-9a-f-]{36}$/i.test(clientId()) && !/^0{8}-/.test(clientId()), hardware, presets: Object.keys(GRAPHICS_PRESETS), installed: st, gameRunning, platform: process.platform, totalRamMb: Math.round(os.totalmem() / 1048576) };
   });
 
   handle('settings:save', async (patch: Partial<LauncherSettings>) => {
     const errs = validateSettings(patch, Math.round(os.totalmem() / 1048576));
     if (errs.length) throw new Error(`invalid settings: ${errs.join(', ')}`);
-    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort'];
+    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort', 'ownerPort', 'ownerPublicUrl', 'gameAddress'];
     for (const k of allowed) if (k in patch) (settings as any)[k] = (patch as any)[k];
     await settingsStore.save(settings);
     return settings;
@@ -213,23 +264,25 @@ function registerIpc() {
   handle('myserver:install', async (eula: boolean) => {
     if (eula !== true) throw Object.assign(new Error('Minecraft EULA not accepted'), { code: 'eula' });
     if (!settings.eulaAccepted) { settings.eulaAccepted = true; await settingsStore.save(settings); }
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
-    const manifest = gm.updater.accept(await api().manifest(settings.channel), config.trustedManifestKeys, { allowHttp: config.allowInsecureLocalApi });
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal(), apiBase());
+    const manifest = gm.updater.accept(await signedManifest(), trustedKeys(), { allowHttp: insecureLocal() });
     const javaExe = await gm.javaExe(manifest.java.mojangComponent);
     await myServer().install(manifest, javaExe, serverOptions(), true, (done, total, detail) => send('progress', { stage: 'server', done, total, detail }));
     return true;
   });
   handle('myserver:start', async () => {
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal(), apiBase());
     const build = await myServer().installedBuild();
     if (!build) throw Object.assign(new Error('install the server first'), { code: 'server_missing' });
+    await writeGuardConfig();
     await myServer().start(await gm.javaExe('java-runtime-delta'), serverOptions());
     return true;
   });
   handle('myserver:stop', async () => { await myServer().stop(); return true; });
   handle('myserver:restart', async () => {
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal(), apiBase());
     if (!(await myServer().installedBuild())) throw Object.assign(new Error('install the server first'), { code: 'server_missing' });
+    await writeGuardConfig();
     await myServer().restart(await gm.javaExe('java-runtime-delta'), serverOptions());
     return true;
   });
@@ -250,7 +303,7 @@ function registerIpc() {
   handle('myserver:command', async (text: string) => { myServer().command(String(text ?? '')); return true; });
   // launcher self-update: asked on every start, always optional
   handle('launcher:check', async () => {
-    launcherUpdate = await checkLauncherUpdate(api(), VERSION, config.trustedManifestKeys, settings.language);
+    launcherUpdate = await checkLauncherUpdate(api(), VERSION, trustedKeys(), settings.language);
     return launcherUpdate ? { current: VERSION, version: launcherUpdate.version, notes: launcherUpdate.notes, size: launcherUpdate.file.size, publishedAt: launcherUpdate.publishedAt } : null;
   });
   handle('launcher:install', async () => {
@@ -271,9 +324,9 @@ function registerIpc() {
   });
 
   handle('pack:check', async () => {
-    const signed = await api().manifest(settings.channel);
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi);
-    const m = gm.updater.accept(signed, config.trustedManifestKeys, { allowHttp: config.allowInsecureLocalApi });
+    const signed = await signedManifest();
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal());
+    const m = gm.updater.accept(signed, trustedKeys(), { allowHttp: insecureLocal() });
     const preset = currentPreset();
     const plan = await gm.updater.plan(m, preset);
     return { version: m.version, buildId: m.buildId, changelog: m.changelog ?? {}, downloadBytes: plan.downloadBytes, changes: plan.write.length + plan.remove.length };
@@ -286,8 +339,8 @@ function registerIpc() {
     // The project account must be signed in, active and linked to this Minecraft profile (verified by Mojang).
     if (!settings.testMode) await accounts.readyToPlay({ name: s.name, uuid: s.uuid, accessToken: s.accessToken });
     busy?.abort(); busy = new AbortController();
-    const signed: SignedManifest = await api().manifest(settings.channel);
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
+    const signed: SignedManifest = await signedManifest();
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal(), apiBase());
     const fromGame = await gm.inGamePresetRequest();
     if (fromGame && fromGame !== settings.preset) { settings.preset = fromGame; settings.presetIsManual = true; await settingsStore.save(settings); }
     const { versionId, javaExe } = await gm.prepare(signed, currentPreset(), (p) => send('progress', p), busy.signal);
@@ -305,11 +358,11 @@ function registerIpc() {
   });
   handle('game:cancel', async () => { busy?.abort(); return true; });
   handle('game:repair', async () => {
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi);
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal());
     return gm.updater.repair((p) => send('progress', { stage: 'pack', done: p.doneBytes, total: p.totalBytes, detail: p.phase }));
   });
   handle('game:rollback', async () => {
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi);
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal());
     return gm.updater.rollback((p) => send('progress', { stage: 'pack', done: p.doneBytes, total: p.totalBytes, detail: p.phase }));
   });
   // ---- Versions: any Minecraft version from Mojang, played with the Microsoft account (or offline by its owner)
@@ -356,6 +409,31 @@ function registerIpc() {
     send('game:state', { running: true });
     if (settings.closeOnLaunch) win?.hide();
     child.on('exit', (code) => { gameRunning = false; send('game:state', { running: false, exitCode: code }); win?.show(); });
+    return true;
+  });
+
+  // ---- Owner mode: build server + admin panel on this PC
+  handle('owner:state', ownerState);
+  handle('owner:enable', async () => {
+    settings.ownerMode = true; await settingsStore.save(settings);
+    await startOwner();
+    return ownerState();
+  });
+  handle('owner:disable', async () => { settings.ownerMode = false; await settingsStore.save(settings); await stopOwner(); return ownerState(); });
+  handle('owner:restart', async () => { await stopOwner(); await startOwner(); return ownerState(); });
+  handle('owner:create', async (username: string, password: string) => {
+    if (!owner) throw new Error('owner mode is off');
+    await owner.createOwner(String(username ?? '').trim(), String(password ?? ''));
+    return ownerState();
+  });
+  handle('owner:openPanel', async () => {
+    if (!owner) throw new Error('owner mode is off');
+    await shell.openExternal(`${owner.url}/admin/`);
+    return true;
+  });
+  handle('conn:resetKey', async () => {
+    const pk = { ...(settings.pinnedKeys ?? {}) }; delete pk[apiBase()];
+    settings.pinnedKeys = pk; await settingsStore.save(settings);
     return true;
   });
 
@@ -417,7 +495,8 @@ app.whenReady().then(async () => {
   settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'), defaultSettings(app.getPath('appData'), Math.round(os.totalmem() / 1048576)));
   settings = await settingsStore.load();
   registerIpc();
-  accounts = new AccountService({ apiBase: () => (backendConfigured() ? apiBase() : ''), allowInsecureLocal: config.allowInsecureLocalApi, userData: app.getPath('userData'), handle, send, log });
+  if (settings.ownerMode) await startOwner().catch((e) => log(`owner mode failed to start: ${(e as Error).stack ?? e}`));
+  accounts = new AccountService({ apiBase: () => (backendConfigured() ? apiBase() : ''), allowInsecureLocal: insecureLocal, userData: app.getPath('userData'), handle, send, log });
   accounts.register();
   await accounts.restore();
   await createWindow();

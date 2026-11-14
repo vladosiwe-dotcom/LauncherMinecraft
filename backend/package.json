@@ -23,5 +23,13 @@
     "@types/express": "^4.17.21",
     "@types/node": "^22.10.0",
     "typescript": "^5.6.3"
-  }
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./embedded": "./dist/embedded.js"
+  },
+  "files": [
+    "dist",
+    "public"
+  ]
 }

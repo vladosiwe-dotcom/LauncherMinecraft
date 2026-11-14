@@ -53,6 +53,8 @@ export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDe
     if (!statusCache || Date.now() - statusCache.at > 15000) statusCache = { at: Date.now(), value: await ping(config.statusHost, config.mcPort) };
     return { ...statusCache.value, checkedAt: new Date(statusCache.at).toISOString() };
   }));
+  // the manifest signing key, so a launcher can pin it on first contact (later changes are refused there)
+  app.get('/api/public/key', wrap(async () => ({ keyId: keys.keyId, publicPem: keys.publicPem })));
   app.get('/api/public/manifest', wrap(async (req, res) => {
     const channel = req.query.channel === 'testing' ? 'testing' : 'stable';
     const m = (await builds.signedManifest(channel)) ?? (channel === 'testing' ? await builds.signedManifest('stable') : null);
@@ -362,11 +364,21 @@ export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDe
   admin.get('/audit', requirePerm('audit.view'), wrap(async () => (await db.audit.read()).entries.slice(0, 500)));
   admin.get('/keys/public', requirePerm('builds.publish'), wrap(async () => ({ keyId: keys.keyId, publicPem: keys.publicPem })));
 
-  app.use('/api/admin', admin);
+  // With adminLocalOnly the panel answers only to this machine: a tunnel (cloudflared) or reverse proxy also
+  // connects from 127.0.0.1, but it always adds forwarding headers, which a local browser never sends.
+  const localOnly = (req: Request, res: Response, next: NextFunction) => {
+    if (!config.adminLocalOnly) return next();
+    const ip = req.socket.remoteAddress ?? '';
+    const loopback = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+    const forwarded = ['cf-connecting-ip', 'x-forwarded-for', 'forwarded', 'x-real-ip', 'cf-ray'].some((h) => req.headers[h] !== undefined);
+    if (loopback && !forwarded) return next();
+    res.status(404).json({ error: 'not_found' });
+  };
+  app.use('/api/admin', localOnly, admin);
 
   // admin panel static files
   const panelDir = resolve(here, '..', 'public', 'admin');
-  app.use('/admin', (_req, res, next) => {
+  app.use('/admin', localOnly, (_req, res, next) => {
     res.setHeader('Content-Security-Policy', "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'");
     next();
   }, express.static(panelDir, { index: 'index.html' }));

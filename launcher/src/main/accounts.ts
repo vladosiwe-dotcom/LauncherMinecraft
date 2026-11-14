@@ -10,7 +10,7 @@ import { RiftAccountApi, RiftAccountError, ensureLinked, type RiftAccount } from
 export interface AccountDeps {
   /** Read on use: the address can be changed in Settings while the launcher runs. */
   apiBase: () => string;
-  allowInsecureLocal: boolean;
+  allowInsecureLocal: () => boolean;
   userData: string;
   handle: <T>(channel: string, fn: (...args: any[]) => Promise<T>) => void;
   send: (channel: string, payload: unknown) => void;
@@ -29,7 +29,7 @@ export class AccountService {
     const base = this.d.apiBase();
     if (base !== this.apiFor) {
       this.apiFor = base;
-      try { this.apiCached = base ? new RiftAccountApi(base, this.d.allowInsecureLocal) : null; }
+      try { this.apiCached = base ? new RiftAccountApi(base, this.d.allowInsecureLocal()) : null; }
       catch (e) { this.apiCached = null; void this.d.log(`accounts disabled: ${(e as Error).message}`); }
     }
     return this.apiCached;
