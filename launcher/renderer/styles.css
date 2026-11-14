@@ -396,3 +396,10 @@ input:focus, select:focus { border-color: var(--violet); outline: none; }
 .ver-row__name b { font: 600 18px/1.2 var(--display); color: var(--gold-hi); letter-spacing: .03em; }
 .ver-row__name small { flex-basis: 100%; color: var(--text-faint); font-size: 12px; }
 .ver-row__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- server management ---------- */
+.srv-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; color: var(--text-dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+.srv-stats:empty { display: none; }
+.srv-stats__names { flex-basis: 100%; color: var(--text); }
+.srv-backups { display: grid; gap: 6px; }
+.srv-backup { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; background: var(--ink-1); border: 1px solid var(--iron-lo); font-size: 13px; }

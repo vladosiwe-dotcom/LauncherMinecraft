@@ -7,6 +7,8 @@ import { isSafeManagedPath, serverFiles as sharedServerFiles, type BuildManifest
 import { applyProperties } from './game.js';
 import { downloadFile, fileExists, runPool } from './http.js';
 import { installNeoForgeServer } from './neoforge.js';
+import { ServerBackups } from './serverbackups.js';
+import { ping } from './slp.js';
 
 /**
  * "My server": a NeoForge server on this PC with the same build as the players, run from the launcher.
@@ -59,8 +61,17 @@ export class LocalServer extends EventEmitter {
   private proc: ChildProcess | null = null;
   private log: string[] = [];
   state: ServerState = 'not_installed';
+  startedAt: number | null = null;
+  readonly backups: ServerBackups;
 
-  constructor(private readonly root: string, readonly dir: string) { super(); }
+  constructor(private readonly root: string, readonly dir: string) {
+    super();
+    this.backups = new ServerBackups(dir, {
+      running: () => this.state === 'running',
+      command: (t) => this.command(t),
+      waitFor: (re, ms) => this.waitFor(re, ms),
+    });
+  }
 
   private setState(s: ServerState) { this.state = s; this.emit('state', s); }
   private line(l: string) {
@@ -70,6 +81,28 @@ export class LocalServer extends EventEmitter {
     if (this.state === 'starting' && /Done \(\d/.test(l)) this.setState('running');
   }
   history() { return [...this.log]; }
+
+  /** Resolves true when a matching log line appears (false after the timeout). */
+  waitFor(match: RegExp, timeoutMs: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      const on = (l: string) => { if (match.test(l)) { clearTimeout(timer); this.off('line', on); resolve(true); } };
+      const timer = setTimeout(() => { this.off('line', on); resolve(false); }, timeoutMs);
+      this.on('line', on);
+    });
+  }
+
+  /** State, uptime and who is online (Server List Ping to this PC; names as the server reports them). */
+  async status(port: number) {
+    const base = { state: this.state, uptimeSec: this.startedAt ? Math.round((Date.now() - this.startedAt) / 1000) : 0 };
+    if (this.state !== 'running') return { ...base, players: 0, maxPlayers: 0, names: [] as string[] };
+    const p = await ping('127.0.0.1', port, 2500);
+    return { ...base, players: p.players, maxPlayers: p.maxPlayers, names: p.names ?? [] };
+  }
+
+  async restart(javaExe: string, o: LocalServerOptions) {
+    await this.stop();
+    await this.start(javaExe, o);
+  }
 
   private stampFile() { return join(this.dir, '.sir-server.json'); }
 
@@ -90,6 +123,7 @@ export class LocalServer extends EventEmitter {
     if (this.proc) throw Object.assign(new Error('stop the server first'), { code: 'server_running' });
     this.setState('installing');
     try {
+      if (await fileExists(this.stampFile())) await this.backups.create('pre-update');
       onProgress(0, 1, 'neoforge');
       await installNeoForgeServer(this.root, this.dir, m.loader.version, javaExe, (l) => this.line(l));
       const files = serverFiles(m);
@@ -127,12 +161,14 @@ export class LocalServer extends EventEmitter {
     await fs.writeFile(join(this.dir, 'user_jvm_args.txt'), `-Xmx${o.memoryMb}M\n`);
     const argsFile = `libraries/net/neoforged/neoforge/${stamp.neoforge}/${process.platform === 'win32' ? 'win' : 'unix'}_args.txt`;
     this.setState('starting');
+    this.startedAt = Date.now();
     this.proc = spawn(javaExe.replace(/javaw\.exe$/, 'java.exe'), ['@user_jvm_args.txt', `@${argsFile}`, 'nogui'], { cwd: this.dir, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
     const feed = (buf: Buffer) => buf.toString('utf8').split(/\r?\n/).filter(Boolean).forEach((l) => this.line(l));
     this.proc.stdout?.on('data', feed);
     this.proc.stderr?.on('data', feed);
     this.proc.on('exit', (code) => {
       this.proc = null;
+      this.startedAt = null;
       this.line(`[launcher] server exited (${code ?? 'signal'})`);
       this.setState('stopped');
     });

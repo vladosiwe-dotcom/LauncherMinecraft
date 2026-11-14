@@ -421,9 +421,57 @@
     $('#srvInstall').disabled = busy || srv.state === 'running' || !$('#srvEula').checked;
     $('#srvStart').disabled = busy || srv.state === 'running' || !srv.build;
     $('#srvStop').disabled = srv.state !== 'running' && srv.state !== 'starting';
+    $('#srvRestart').disabled = srv.state !== 'running';
+    const mem = $('#srvMemory');
+    mem.max = String(Math.max(4096, Math.floor((state.totalRamMb - 2048) / 512) * 512));
+    if (document.activeElement !== mem) { mem.value = s.serverMemoryMb; $('#srvMemoryOut').textContent = `${(s.serverMemoryMb / 1024).toFixed(1)} ${t('gb')}`; }
+    if (document.activeElement !== $('#srvPort')) $('#srvPort').value = s.serverPort;
+    renderSrvStats(); renderBackups();
     $('#srvAddr').textContent = srv.state === 'running' ? t('srv.addr', { port: srv.port ?? s.serverPort }) : '';
     renderPlay();
   }
+  const fmtUptime = (sec) => { const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60); return h ? `${h} ч ${m} мин` : `${m} мин`; };
+  function renderSrvStats() {
+    const st = srv.status, box = $('#srvStats');
+    if (!st || st.state !== 'running') { box.innerHTML = ''; return; }
+    box.innerHTML = `<span>${esc(t('srv.uptime', { t: fmtUptime(st.uptimeSec) }))}</span><span>${esc(t('srv.players', { n: st.players, max: st.maxPlayers }))}</span>`
+      + `<span class="srv-stats__names">${st.names.length ? st.names.map(esc).join(', ') : esc(t('srv.nobody'))}</span>`;
+  }
+  async function pollStatus() {
+    if (!$('.view--server').classList.contains('is-active')) return;
+    try { srv.status = await call(sir.myServerStatus()); renderSrvStats(); } catch { /* not running */ }
+  }
+  setInterval(pollStatus, 5000);
+  const bk = { list: [], confirm: null };
+  function renderBackups() {
+    const box = $('#srvBackups');
+    if (!bk.list.length) { box.innerHTML = `<p class="hint">${esc(t('srv.backup.none'))}</p>`; return; }
+    const stopped = !['running', 'starting', 'stopping', 'installing'].includes(srv.state);
+    box.innerHTML = bk.list.map((b) => `<div class="srv-backup" data-name="${esc(b.name)}">
+      <span>${esc(new Date(b.createdAt).toLocaleString(state.lang === 'en' ? 'en-GB' : state.lang))} · ${esc(t(`srv.reason.${b.reason}`))} · ${esc(fmtBytes(b.size))}</span>
+      <span class="srv-actions"><button type="button" class="btn btn--ghost" data-bact="restore" ${stopped ? '' : 'disabled'}>${esc(bk.confirm === `restore:${b.name}` ? t('srv.backup.confirm') : t('srv.backup.restore'))}</button>
+      <button type="button" class="btn btn--ghost" data-bact="remove">${esc(bk.confirm === `remove:${b.name}` ? t('srv.backup.confirm') : t('srv.backup.remove'))}</button></span></div>`).join('');
+  }
+  async function loadBackups() { try { bk.list = await call(sir.serverBackups()); } catch { bk.list = []; } renderBackups(); }
+  $('#srvBackups').addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-bact]'); if (!b || b.disabled) return;
+    const name = b.closest('[data-name]').dataset.name, key = `${b.dataset.bact}:${name}`;
+    if (bk.confirm !== key) { bk.confirm = key; renderBackups(); setTimeout(() => { if (bk.confirm === key) { bk.confirm = null; renderBackups(); } }, 4000); return; }
+    bk.confirm = null;
+    try { bk.list = await call(b.dataset.bact === 'restore' ? sir.restoreBackup(name) : sir.removeBackup(name)); } catch (err) { showError(err); }
+    renderBackups();
+  });
+  $('#srvBackup').addEventListener('click', async (e) => {
+    e.target.disabled = true;
+    try { bk.list = await call(sir.backupServer()); } catch (err) { showError(err); }
+    finally { e.target.disabled = false; renderBackups(); }
+  });
+  $('#srvBackupsDir').addEventListener('click', () => call(sir.openServerDir('backups')).catch(showError));
+  $('#srvDir').addEventListener('click', () => call(sir.openServerDir('server')).catch(showError));
+  $('#srvRestart').addEventListener('click', async () => { try { await call(sir.restartMyServer()); } catch (e) { showError(e); } await loadServerView(); });
+  $('#srvMemory').addEventListener('input', (e) => { $('#srvMemoryOut').textContent = `${(e.target.value / 1024).toFixed(1)} ${t('gb')}`; });
+  $('#srvMemory').addEventListener('change', (e) => save({ serverMemoryMb: Number(e.target.value) }).then(renderServer));
+  $('#srvPort').addEventListener('change', (e) => save({ serverPort: Number(e.target.value) }).then(renderServer));
   function appendLog(lines) {
     const pre = $('#srvLog'); const atEnd = pre.scrollTop + pre.clientHeight >= pre.scrollHeight - 8;
     srv.log.push(...lines); if (srv.log.length > 1500) srv.log.splice(0, srv.log.length - 1500);
@@ -432,7 +480,7 @@
   }
   async function loadServerView() {
     try { const r = await call(sir.myServer()); Object.assign(srv, { state: r.state, build: r.build, port: r.port }); srv.log = []; appendLog(r.log); } catch { /* not available */ }
-    renderServer();
+    renderServer(); loadBackups(); pollStatus();
   }
   sir.onServerLine?.((l) => appendLog([l]));
   sir.onServerState?.((st) => { srv.state = st; if (st === 'stopped') loadServerView(); else renderServer(); });

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, safeStorage, shell, Tray } from 'electron';
 import { promises as fs, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -121,7 +121,7 @@ function errorPayload(e: unknown) {
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
-  for (const c of ['eula', 'server_running', 'server_missing', 'test_nick']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
+  for (const c of ['eula', 'server_running', 'server_missing', 'test_nick', 'no_world']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
   if (/ENOSPC/.test(msg)) return { code: 'disk.full', message: msg };
   if (/fetch failed|network|ENOTFOUND|ECONNRE|timed? ?out/i.test(msg)) return { code: 'network', message: msg };
   if (/signature/.test(msg)) return { code: 'manifest.signature', message: msg };
@@ -169,7 +169,7 @@ function registerIpc() {
   handle('settings:save', async (patch: Partial<LauncherSettings>) => {
     const errs = validateSettings(patch, Math.round(os.totalmem() / 1048576));
     if (errs.length) throw new Error(`invalid settings: ${errs.join(', ')}`);
-    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots'];
+    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort'];
     for (const k of allowed) if (k in patch) (settings as any)[k] = (patch as any)[k];
     await settingsStore.save(settings);
     return settings;
@@ -227,6 +227,26 @@ function registerIpc() {
     return true;
   });
   handle('myserver:stop', async () => { await myServer().stop(); return true; });
+  handle('myserver:restart', async () => {
+    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
+    if (!(await myServer().installedBuild())) throw Object.assign(new Error('install the server first'), { code: 'server_missing' });
+    await myServer().restart(await gm.javaExe('java-runtime-delta'), serverOptions());
+    return true;
+  });
+  handle('myserver:status', async () => myServer().status(settings.serverPort));
+  handle('myserver:backups', async () => myServer().backups.list());
+  handle('myserver:backup', async () => {
+    const b = await myServer().backups.create('manual');
+    if (!b) throw Object.assign(new Error('no world yet: start the server once'), { code: 'no_world' });
+    return myServer().backups.list();
+  });
+  handle('myserver:restore', async (name: string) => { await myServer().backups.restore(String(name)); return myServer().backups.list(); });
+  handle('myserver:removeBackup', async (name: string) => { await myServer().backups.remove(String(name)); return myServer().backups.list(); });
+  handle('myserver:openDir', async (what: 'server' | 'backups') => {
+    const dir = what === 'backups' ? myServer().backups.dir : myServer().dir;
+    await fs.mkdir(dir, { recursive: true });
+    return shell.openPath(dir);
+  });
   handle('myserver:command', async (text: string) => { myServer().command(String(text ?? '')); return true; });
   // launcher self-update: asked on every start, always optional
   handle('launcher:check', async () => {
@@ -359,6 +379,19 @@ function currentPreset(): GraphicsPresetId {
   return settings.preset ?? (hardware ? recommendPreset(hardware).preset : 'balanced');
 }
 
+let tray: Tray | null = null;
+let quitting = false;
+function ensureTray() {
+  if (tray) return;
+  tray = new Tray(nativeImage.createFromPath(join(appRoot, 'assets', 'icon.png')).resize({ width: 16, height: 16 }));
+  tray.setToolTip('Spell and Iron Rift — сервер работает');
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Открыть лаунчер', click: () => { win?.show(); win?.focus(); } },
+    { label: 'Остановить сервер и выйти', click: () => { quitting = true; app.quit(); } },
+  ]));
+  tray.on('click', () => { win?.show(); win?.focus(); });
+}
+
 async function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 780, minWidth: 1100, minHeight: 680, frame: false, backgroundColor: '#0c0b10', show: false,
@@ -368,6 +401,13 @@ async function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.once('ready-to-show', () => win?.show());
+  // Closing the window while "My server" runs keeps the launcher in the tray, so the server is not cut off.
+  win.on('close', (e) => {
+    if (quitting || !localServer || !['running', 'starting'].includes(localServer.state)) return;
+    e.preventDefault();
+    win?.hide();
+    ensureTray();
+  });
   await win.loadFile(join(appRoot, 'renderer', 'index.html'));
 }
 

@@ -131,7 +131,25 @@
             <button type="button" class="btn" id="srvInstall" data-i18n="srv.install"></button>
             <button type="button" class="btn btn--gold" id="srvStart" data-i18n="srv.start"></button>
             <button type="button" class="btn btn--ghost" id="srvStop" data-i18n="srv.stop"></button>
+            <button type="button" class="btn btn--ghost" id="srvRestart" data-i18n="srv.restart"></button>
           </div>
+          <div class="srv-stats" id="srvStats"></div>
+          <div class="field">
+            <label for="srvMemory" data-i18n="srv.memory"></label>
+            <div class="slider"><input type="range" id="srvMemory" min="2048" max="16384" step="512"><output id="srvMemoryOut"></output></div>
+          </div>
+          <div class="field"><label for="srvPort" data-i18n="srv.port"></label><input type="number" id="srvPort" min="1024" max="65535"></div>
+          <p class="hint" data-i18n="srv.applyHint"></p>
+        </div>
+        <div class="card srv-card">
+          <div class="card__head"><span class="eyebrow" data-i18n="srv.backups"></span></div>
+          <p class="hint" data-i18n="srv.backups.d"></p>
+          <div class="srv-actions">
+            <button type="button" class="btn" id="srvBackup" data-i18n="srv.backup.now"></button>
+            <button type="button" class="btn btn--ghost" id="srvBackupsDir" data-i18n="srv.backup.folder"></button>
+            <button type="button" class="btn btn--ghost" id="srvDir" data-i18n="srv.folder"></button>
+          </div>
+          <div class="srv-backups" id="srvBackups"></div>
         </div>
       </div>
       <div class="card srv-console">
