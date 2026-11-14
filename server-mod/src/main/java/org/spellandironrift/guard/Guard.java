@@ -112,7 +112,7 @@ public final class Guard {
     private static void check(ServerPlayer player) {
         UUID id = player.getUUID();
         MinecraftServer server = player.server;
-        lookup(id).whenComplete((verdict, error) -> server.execute(() -> {
+        lookup(id, player.getGameProfile().getName()).whenComplete((verdict, error) -> server.execute(() -> {
             if (player.hasDisconnected()) return;
             Verdict v = verdict;
             if (v == null) { // account server unreachable
@@ -120,16 +120,19 @@ public final class Guard {
                 v = GuardConfig.get().useCacheWhenOffline && cached != null ? cached
                         : new Verdict(false, null, null, "unreachable", null);
             } else {
-                cache.put(id.toString(), v);
-                save(cacheFile(), cache);
+                if (!"not_linked".equals(v.reason())) {
+                    cache.put(id.toString(), v);
+                    save(cacheFile(), cache);
+                }
             }
             apply(server, player, v);
         }));
     }
 
-    private static CompletableFuture<Verdict> lookup(UUID id) {
+    private static CompletableFuture<Verdict> lookup(UUID id, String name) {
         GuardConfig.Values c = GuardConfig.get();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(c.apiBase.replaceAll("/$", "") + "/api/server/players/" + id))
+        String q = "?name=" + java.net.URLEncoder.encode(name, StandardCharsets.UTF_8);
+        HttpRequest req = HttpRequest.newBuilder(URI.create(c.apiBase.replaceAll("/$", "") + "/api/server/players/" + id + q))
                 .header("x-rift-server-key", c.serverKey).timeout(Duration.ofSeconds(10)).GET().build();
         return HTTP.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).thenApply(res -> {
             if (res.statusCode() != 200) {
@@ -138,7 +141,10 @@ public final class Guard {
             }
             JsonObject o = GSON.fromJson(res.body(), JsonObject.class);
             boolean allowed = o.has("allowed") && o.get("allowed").getAsBoolean();
-            return new Verdict(allowed, str(o, "nick"), str(o, "role"), str(o, "reason"), str(o, "banReason"));
+            String reason = str(o, "reason");
+            // an unlinked profile gets a one-time code to enter in the launcher; it travels in the reason slot
+            if ("not_linked".equals(reason)) return new Verdict(false, null, null, "not_linked", str(o, "linkCode"));
+            return new Verdict(allowed, str(o, "nick"), str(o, "role"), reason, str(o, "banReason"));
         }).exceptionally(e -> null);
     }
 
@@ -156,6 +162,8 @@ public final class Guard {
                 // literal text: players do not have this server-only mod, so translation keys would show raw
                 case "banned" -> Component.literal("Аккаунт Spell and Iron Rift заблокирован / account banned.\nПричина / reason: "
                         + (v.banReason() == null || v.banReason().isBlank() ? "—" : v.banReason()));
+                case "not_linked" -> Component.literal("Привяжите аккаунт Spell and Iron Rift: в лаунчере откройте Профиль и введите код\n"
+                        + v.banReason() + "\n(код действует 10 минут, затем зайдите снова)\n\nLink your account: in the launcher open Profile and enter the code above.");
                 case "unreachable" -> Component.literal("Сервер аккаунтов недоступен, попробуйте через минуту.\nThe account server is unavailable, try again in a minute.");
                 default -> Component.literal("Нужен аккаунт Spell and Iron Rift: зарегистрируйтесь и войдите через лаунчер.\nA Spell and Iron Rift account is required: register in the launcher.");
             };

@@ -37,6 +37,13 @@
     const rb = $('#alertRetry'); rb.hidden = !retry; rb.onclick = () => { $('#alert').hidden = true; retry?.(); };
   }
   $('#alertClose').onclick = () => { $('#alert').hidden = true; };
+  /** Same banner as errors, for a plain notice (optionally with a link button). */
+  function showNotice(text, url) {
+    $('#alertText').textContent = text;
+    $('#alert').hidden = false;
+    const rb = $('#alertRetry'); rb.hidden = !url;
+    if (url) { rb.textContent = t('play.official.get'); rb.onclick = () => { $('#alert').hidden = true; sir.openUrl(url); }; }
+  }
 
   // ---------- skins ----------
   function defaultSkin() {
@@ -91,6 +98,9 @@
     else if (state.busy) l.textContent = t('play.cancel');
     else if (state.settings?.testMode) l.textContent = t('play.test', { nick: state.settings.testNick || '—' });
     else if (acc.available && !acc.account) l.textContent = t('acc.play.signin');
+    else if (state.settings?.playVia !== 'own' && !state.installed?.buildId) l.textContent = t('play.install');
+    else if (state.settings?.playVia !== 'own' && state.update && state.update.changes > 0) l.textContent = t('play.update');
+    else if (state.settings?.playVia !== 'own') l.textContent = t('play.official');
     else if (!state.session) l.textContent = t('play.login');
     else if (!state.installed?.buildId) l.textContent = t('play.install');
     else if (state.update && state.update.changes > 0) l.textContent = t('play.update');
@@ -143,6 +153,7 @@
     $('#fullscreen').checked = s.fullscreen; $('#closeOnLaunch').checked = s.closeOnLaunch;
     $('#installDir').textContent = s.installDir; $('#channel').value = s.channel;
     $('#presetAuto').checked = !s.presetIsManual;
+    $('#playViaOfficial').checked = s.playVia !== 'own'; $('#playViaOwn').checked = s.playVia === 'own';
     if (document.activeElement !== $('#azureClientId')) $('#azureClientId').value = s.azureClientId ?? '';
     if (document.activeElement !== $('#apiBase')) $('#apiBase').value = s.apiBase ?? '';
     $('#clientState').textContent = state.clientIdSet ? `✓ ${t('conn.ok')}` : t('conn.missing');
@@ -251,6 +262,15 @@
     if (state.busy) { await sir.cancel(); return; }
     if (state.settings?.testMode && !/^[A-Za-z0-9_]{3,16}$/.test(state.settings.testNick || '')) { go('server'); $('#testNick').focus(); return; }
     if (!state.settings?.testMode && acc.available && !acc.account) { renderAuthGate(); return; }
+    if (!state.settings?.testMode && state.settings?.playVia !== 'own') {
+      state.busy = true; renderPlay();
+      try {
+        const r = await call(sir.playOfficial()); const st = await call(sir.state()); state.installed = st.installed;
+        showNotice(r.opened ? t('play.official.opened') : t('play.official.missing'), r.opened ? null : 'https://www.minecraft.net/download');
+      } catch (e) { showError(e, () => $('#playBtn').click()); }
+      finally { state.busy = false; $('#progress').hidden = true; renderPlay(); renderBuild(); loadUpdate(); }
+      return;
+    }
     if (!state.settings?.testMode && !state.session) { login(); return; }
     state.busy = true; renderPlay();
     try { await call(sir.play()); const st = await call(sir.state()); state.installed = st.installed; }
@@ -397,11 +417,18 @@
     if (!a) return `<div class="accountcard"><div class="accountcard__head"><b>${t('acc.title')}</b></div><p class="hint">${t('acc.none')}</p><div class="profile__actions"><button type="button" class="btn btn--gold" id="accOpen">${t('acc.login')}</button></div></div>`;
     return `<div class="accountcard"><div class="accountcard__head"><b>${esc(a.nick)}</b><span class="role role--${a.role}">${t(`acc.role.${a.role}`)}</span></div>
       <dl><dt>${t('acc.uuid')}</dt><dd class="mono">${esc(a.id)}</dd><dt>${t('acc.minecraft')}</dt><dd>${a.minecraft ? esc(a.minecraft.name) : t('acc.notLinked')}</dd></dl>
+      ${a.minecraft ? '' : `<form id="linkCodeForm" class="linkcode"><label for="linkCode">${esc(t('link.code'))}</label><p class="hint">${esc(t('link.code.d'))}</p>
+        <div class="pathrow"><input type="text" id="linkCode" maxlength="12" autocomplete="off" spellcheck="false" placeholder="ABCD2345"><button type="submit" class="btn btn--gold">${esc(t('link.code.apply'))}</button></div></form>`}
       <div class="profile__actions"><button type="button" class="btn" id="accPw">${t('acc.pw.title')}</button><button type="button" class="btn btn--ghost" id="accOut">${t('acc.logout')}</button></div></div>`;
   }
   function bindAccountCard() {
     $('#accOpen')?.addEventListener('click', () => { setAuthMode('login'); $('#authGate').hidden = false; $('#accNick').focus(); });
     $('#accPw')?.addEventListener('click', () => openPw(false));
+    $('#linkCodeForm')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try { acc.account = await call(sir.accountLinkCode($('#linkCode').value)); renderProfile(); renderPlay(); }
+      catch (err) { showError(err); }
+    });
     $('#accOut')?.addEventListener('click', async () => { await call(sir.accountLogout()).catch(() => null); acc.account = null; renderAuthGate(); renderProfile(); });
   }
 
@@ -632,6 +659,7 @@
     Object.assign(state, { owner: st.owner, backend: st.backend, clientIdSet: st.clientIdSet });
     renderSettings(); renderVersions();
   }
+  $$('input[name="playVia"]').forEach((r) => r.addEventListener('change', (e) => save({ playVia: e.target.value }).then(renderPlay)));
   $('#azureClientId').addEventListener('change', (e) => save({ azureClientId: e.target.value.trim() }).then(refreshFlags));
   $('#apiBase').addEventListener('change', (e) => save({ apiBase: e.target.value.trim().replace(/\/$/, '') }).then(() => { refreshFlags(); loadServer(); loadNews(); loadUpdate(); loadAccount(); }));
   document.addEventListener('click', (e) => { const o = e.target.closest('[data-open]'); if (o) sir.openUrl(o.dataset.open); });

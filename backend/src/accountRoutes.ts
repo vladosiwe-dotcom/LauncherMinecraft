@@ -49,6 +49,7 @@ export function accountRouter(accounts: Accounts): Router {
     await accounts.changePassword(me(res), req.body?.current, String(req.body?.next ?? ''), bearer(req)!);
   }));
   r.post('/link/challenge', authed, wrap(async (_req, res) => ({ serverId: accounts.linkChallenge(me(res)) })));
+  r.post('/link/code', authed, wrap(async (req, res) => ({ minecraft: await accounts.linkByCode(me(res), String(req.body?.code ?? '')) })));
   r.post('/link', authed, wrap(async (req, res) => ({ minecraft: await accounts.link(me(res), String(req.body?.minecraftName ?? '')) })));
   return r;
 }
@@ -61,7 +62,7 @@ export function serverApiRouter(accounts: Accounts, serverKey: string): Router {
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  r.get('/players/:uuid', wrap(async (req) => accounts.lookupMinecraft(req.params.uuid!)));
+  r.get('/players/:uuid', wrap(async (req) => accounts.lookupMinecraft(req.params.uuid!, typeof req.query.name === 'string' ? req.query.name : undefined)));
   return r;
 }
 

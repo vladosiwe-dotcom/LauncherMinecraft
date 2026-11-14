@@ -132,3 +132,29 @@ test('brute force is rate limited', async () => {
   for (let i = 0; i < 8; i++) await post('/login', { nick: 'Target', password: `wrong-${i}a` });
   assert.equal((await post('/login', { nick: 'Target', password: 'target-pass-1' })).status, 429);
 });
+
+test('link by code: the game server shows a code to a verified, unlinked profile; only that account can use it', async () => {
+  const mc = { id: 'cc4e2b0a9f2c4f7f8b1d2a3c4d5e6f72', name: 'CodeMC' };
+  const lookup = async () => { const r = await fetch(`${base}/api/server/players/${mc.id}?name=${mc.name}`, { headers: { 'x-rift-server-key': SERVER_KEY } }); return r.json(); };
+  const first = await lookup();
+  assert.equal(first.allowed, false);
+  assert.equal(first.reason, 'not_linked');
+  assert.match(first.linkCode, /^[A-HJ-NP-Z2-9]{8}$/);
+  assert.equal((await lookup()).linkCode, first.linkCode, 'same code while it is valid');
+
+  const { body } = await post('/register', { nick: 'Coder', password: 'code-pass-42' });
+  const token = body.token;
+  assert.equal((await post('/link/code', { code: 'WRONG123' }, token)).body.error, 'link_code_invalid');
+  const ok = await post('/link/code', { code: first.linkCode.toLowerCase() }, token);
+  assert.equal(ok.status, 200);
+  assert.equal(ok.body.minecraft.name, 'CodeMC');
+  assert.equal((await post('/link/code', { code: first.linkCode }, token)).body.error, 'link_code_invalid', 'a code works once');
+
+  const after = await lookup();
+  assert.equal(after.allowed, true);
+  assert.equal(after.nick, 'Coder');
+
+  // guessing codes is rate limited per account
+  for (let i = 0; i < 10; i++) await post('/link/code', { code: `BAD${i}XXXX` }, token);
+  assert.equal((await post('/link/code', { code: 'ANYTHING' }, token)).body.error, 'too_many_attempts', 'guessing codes is rate limited');
+});

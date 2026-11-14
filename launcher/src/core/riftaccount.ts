@@ -48,6 +48,7 @@ export class RiftAccountApi {
   logout(token: string) { return this.call<unknown>('POST', '/logout', {}, token); }
   changePassword(token: string, current: string, next: string) { return this.call<unknown>('POST', '/password', { current, next }, token); }
   linkChallenge(token: string) { return this.call<{ serverId: string }>('POST', '/link/challenge', {}, token); }
+  linkCode(token: string, code: string) { return this.call<{ minecraft: { uuid: string; name: string } }>('POST', '/link/code', { code }, token); }
   link(token: string, minecraftName: string) { return this.call<{ minecraft: { uuid: string; name: string } }>('POST', '/link', { minecraftName }, token); }
 }
 

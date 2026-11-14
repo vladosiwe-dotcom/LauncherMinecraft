@@ -266,6 +266,14 @@
 
       <div class="tabpanel" data-tab="connection">
         <div class="field">
+          <span class="label" data-i18n="conn.playVia"></span>
+          <div class="segmented">
+            <label><input type="radio" name="playVia" value="official" id="playViaOfficial"><span data-i18n="conn.playVia.official"></span></label>
+            <label><input type="radio" name="playVia" value="own" id="playViaOwn"><span data-i18n="conn.playVia.own"></span></label>
+          </div>
+          <p class="hint" data-i18n="conn.playVia.d"></p>
+        </div>
+        <div class="field">
           <label for="azureClientId" data-i18n="conn.client"></label>
           <input type="text" id="azureClientId" spellcheck="false" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
           <p class="hint" data-i18n="conn.client.d"></p>

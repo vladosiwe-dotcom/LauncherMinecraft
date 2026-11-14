@@ -85,6 +85,9 @@ export class Accounts {
   readonly loginLimiter = new LoginLimiter(8, 15 * 60 * 1000);
   private readonly registerLimiter = new LoginLimiter(5, 60 * 60 * 1000);
   private challenges = new Map<string, LinkChallenge>();
+  /** Codes the game server shows a Mojang-verified player whose profile is not linked yet (code -> profile). */
+  private linkCodes = new Map<string, { uuid: string; name: string; expiresAt: number }>();
+  private readonly linkCodeLimiter = new LoginLimiter(10, 10 * 60 * 1000);
   private readonly dummyHash: Promise<string>;
 
   constructor(private readonly db: Stores, private readonly hasJoined: HasJoined) {
@@ -193,11 +196,48 @@ export class Accounts {
 
   // ------------------------------------------------------------ game server
 
-  /** What the game server needs to know about a Mojang-verified player UUID. */
-  async lookupMinecraft(mcUuid: string) {
+  /** One code per profile for 10 minutes; letters and digits that cannot be confused (no 0/O, 1/I). */
+  private codeFor(uuid: string, name: string): string {
+    const now = Date.now();
+    for (const [k, c] of this.linkCodes) if (c.expiresAt < now) this.linkCodes.delete(k);
+    for (const [k, c] of this.linkCodes) if (c.uuid === uuid) return k;
+    const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    do { code = Array.from(randomBytes(8), (b) => alphabet[b % alphabet.length]).join(''); } while (this.linkCodes.has(code));
+    this.linkCodes.set(code, { uuid, name, expiresAt: now + 10 * 60 * 1000 });
+    return code;
+  }
+
+  /**
+   * Links the account to the Minecraft profile behind a code the game server showed. The server runs in
+   * online mode, so that profile is verified by Mojang; only someone signed in to this account can submit
+   * the code. Used when the game is started from the official Minecraft Launcher.
+   */
+  async linkByCode(a: Account, rawCode: string) {
+    if (this.linkCodeLimiter.blocked(a.id)) throw fail(429, 'too_many_attempts');
+    const code = String(rawCode ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+    const c = this.linkCodes.get(code);
+    if (!c || c.expiresAt < Date.now()) { this.linkCodeLimiter.fail(a.id); throw fail(400, 'link_code_invalid'); }
+    this.linkCodes.delete(code);
+    await this.db.accounts.update((d) => {
+      const other = d.accounts.find((x) => x.minecraft?.uuid === c.uuid && x.id !== a.id);
+      if (other) throw fail(409, 'minecraft_linked_elsewhere');
+      const x = d.accounts.find((y) => y.id === a.id);
+      if (x) x.minecraft = { uuid: c.uuid, name: c.name, linkedAt: new Date().toISOString() };
+    });
+    return { uuid: c.uuid, name: c.name };
+  }
+
+  /** What the game server needs to know about a Mojang-verified player UUID (name: for a link code). */
+  async lookupMinecraft(mcUuid: string, mcName?: string) {
     const uuid = dashUuid(mcUuid);
     const a = (await this.db.accounts.read()).accounts.find((x) => x.minecraft?.uuid === uuid);
-    if (!a) return { allowed: false, reason: 'not_registered' as const };
+    if (!a) {
+      const name = String(mcName ?? '');
+      return /^[A-Za-z0-9_]{3,16}$/.test(name)
+        ? { allowed: false, reason: 'not_linked' as const, linkCode: this.codeFor(uuid, name) }
+        : { allowed: false, reason: 'not_registered' as const };
+    }
     if (a.status === 'banned') return { allowed: false, reason: 'banned' as const, banReason: a.banReason ?? '', nick: a.nick, accountId: a.id };
     return { allowed: true, nick: a.nick, role: a.role, accountId: a.id };
   }

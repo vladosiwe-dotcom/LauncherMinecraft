@@ -10,6 +10,8 @@ import { fetchJson } from '../core/http.js';
 import { VersionLibrary } from '../core/versions.js';
 import { startEmbedded, type EmbeddedBackend } from '@sir/backend/embedded';
 import { Tunnel } from '../core/tunnel.js';
+import { installNeoForge } from '../core/neoforge.js';
+import { officialDir, openOfficial, writeOfficialProfile } from '../core/official.js';
 import { decodeInvite, encodeInvite } from '../core/invite.js';
 import { ping as slpPing } from '../core/slp.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
@@ -252,7 +254,7 @@ function registerIpc() {
   handle('settings:save', async (patch: Partial<LauncherSettings>) => {
     const errs = validateSettings(patch, Math.round(os.totalmem() / 1048576));
     if (errs.length) throw new Error(`invalid settings: ${errs.join(', ')}`);
-    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort', 'ownerPort', 'ownerPublicUrl', 'gameAddress', 'tunnelMode', 'tunnelAuto'];
+    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort', 'ownerPort', 'ownerPublicUrl', 'gameAddress', 'tunnelMode', 'tunnelAuto', 'playVia'];
     for (const k of allowed) if (k in patch) (settings as any)[k] = (patch as any)[k];
     await settingsStore.save(settings);
     return settings;
@@ -387,6 +389,26 @@ function registerIpc() {
       win?.show();
     });
     return true;
+  });
+  /**
+   * "Play" through the official Minecraft Launcher: sync the build (only changed files), install NeoForge there,
+   * add our installation and open it. The player signs in to Microsoft in the official launcher.
+   */
+  handle('game:playOfficial', async () => {
+    if (gameRunning) throw Object.assign(new Error('game already running'), { code: 'game_running' });
+    if (accounts.available() && !accounts.account) throw new RiftAccountError('account_required', 401);
+    busy?.abort(); busy = new AbortController();
+    const signed: SignedManifest = await signedManifest();
+    const gm = new GameManager(settings, trustedKeys(), insecureLocal(), apiBase());
+    const fromGame = await gm.inGamePresetRequest();
+    if (fromGame && fromGame !== settings.preset) { settings.preset = fromGame; settings.presetIsManual = true; await settingsStore.save(settings); }
+    const { javaExe, manifest } = await gm.prepare(signed, currentPreset(), (p) => send('progress', p), busy.signal);
+    send('progress', { stage: 'launch', done: 0, total: 1 });
+    const dir = officialDir();
+    const versionId = await installNeoForge(dir, manifest.loader.version, javaExe, (l) => { void log(`[neoforge→official] ${l}`); });
+    await writeOfficialProfile(dir, { versionId, gameDir: gm.gameDir, memoryMb: settings.memoryMb, jvmArgs: settings.jvmArgs, width: settings.width, height: settings.height });
+    send('progress', { stage: 'launch', done: 1, total: 1 });
+    return { opened: (await openOfficial()) === 'opened', versionId };
   });
   handle('game:cancel', async () => { busy?.abort(); return true; });
   handle('game:repair', async () => {

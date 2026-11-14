@@ -49,6 +49,9 @@ export class AccountService {
     return this.api;
   }
 
+  /** True when a project server is configured (its accounts are then required to play). */
+  available() { return !!this.api; }
+
   private publish() { this.d.send('account:changed', this.account); }
 
   /** On start: continue the saved session (rotating the token). Offline keeps the account until it can be checked. */
@@ -91,6 +94,12 @@ export class AccountService {
       const r = await this.need().login(String(nick ?? ''), String(password ?? ''));
       await this.save(r.token); this.account = r.account; this.publish();
       return r.account;
+    });
+    this.d.handle('account:linkCode', async (code: string) => {
+      if (!this.token) throw new RiftAccountError('account_required', 401);
+      await this.need().linkCode(this.token, String(code ?? ''));
+      this.account = (await this.need().me(this.token)).account; this.publish();
+      return this.account;
     });
     this.d.handle('account:logout', async () => {
       if (this.token) await this.need().logout(this.token).catch(() => undefined);
