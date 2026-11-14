@@ -8,7 +8,8 @@ import { RiftAccountApi, RiftAccountError, ensureLinked, type RiftAccount } from
  * (encrypted with the OS keychain like the Microsoft token), and the IPC the UI uses.
  */
 export interface AccountDeps {
-  apiBase: string;
+  /** Read on use: the address can be changed in Settings while the launcher runs. */
+  apiBase: () => string;
   allowInsecureLocal: boolean;
   userData: string;
   handle: <T>(channel: string, fn: (...args: any[]) => Promise<T>) => void;
@@ -19,12 +20,19 @@ export interface AccountDeps {
 export class AccountService {
   private token: string | null = null;
   account: RiftAccount | null = null;
-  private readonly api: RiftAccountApi | null;
+  private apiFor = '';
+  private apiCached: RiftAccountApi | null = null;
 
-  constructor(private readonly d: AccountDeps) {
-    let api: RiftAccountApi | null = null;
-    try { api = new RiftAccountApi(d.apiBase, d.allowInsecureLocal); } catch (e) { void d.log(`accounts disabled: ${(e as Error).message}`); }
-    this.api = api;
+  constructor(private readonly d: AccountDeps) {}
+
+  private get api(): RiftAccountApi | null {
+    const base = this.d.apiBase();
+    if (base !== this.apiFor) {
+      this.apiFor = base;
+      try { this.apiCached = base ? new RiftAccountApi(base, this.d.allowInsecureLocal) : null; }
+      catch (e) { this.apiCached = null; void this.d.log(`accounts disabled: ${(e as Error).message}`); }
+    }
+    return this.apiCached;
   }
 
   private vault() { return join(this.d.userData, 'rift-account.bin'); }

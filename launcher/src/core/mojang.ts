@@ -12,7 +12,23 @@ export function currentOs(): OsName {
 
 export interface Rule { action: 'allow' | 'disallow'; os?: { name?: string; arch?: string; version?: string }; features?: Record<string, boolean> }
 export interface Artifact { path: string; sha1: string; size: number; url: string }
-export interface Library { name: string; downloads?: { artifact?: Artifact }; url?: string; rules?: Rule[] }
+export interface Library {
+  name: string;
+  downloads?: { artifact?: Artifact; classifiers?: Record<string, Artifact> };
+  url?: string;
+  rules?: Rule[];
+  /** Older versions (before 1.19): OS -> classifier of the jar with native libraries, e.g. "natives-windows". */
+  natives?: Partial<Record<OsName, string>>;
+  extract?: { exclude?: string[] };
+}
+
+/** Native-library jar of a library for this OS (older versions), or null. */
+export function nativeArtifact(lib: Library, os: OsName = currentOs()): Artifact | null {
+  const key = lib.natives?.[os];
+  if (!key) return null;
+  const cls = key.replace('${arch}', process.arch === 'ia32' ? '32' : '64');
+  return lib.downloads?.classifiers?.[cls] ?? null;
+}
 export type Argument = string | { rules: Rule[]; value: string | string[] };
 
 export interface VersionJson {
@@ -22,6 +38,8 @@ export interface VersionJson {
   type?: string;
   mainClass: string;
   arguments?: { game?: Argument[]; jvm?: Argument[] };
+  /** Versions before 1.13: one string of game arguments. */
+  minecraftArguments?: string;
   libraries: Library[];
   assetIndex?: { id: string; sha1: string; size: number; url: string };
   assets?: string;
@@ -76,6 +94,8 @@ export class VanillaInstaller {
     for (const lib of v.libraries) {
       const a = lib.downloads?.artifact;
       if (a && rulesAllow(lib.rules)) jobs.push({ url: a.url, dest: join(this.librariesDir(), a.path), sha1: a.sha1, size: a.size });
+      const n = rulesAllow(lib.rules) ? nativeArtifact(lib) : null;
+      if (n) jobs.push({ url: n.url, dest: join(this.librariesDir(), n.path), sha1: n.sha1, size: n.size });
     }
     if (v.logging?.client) {
       const f = v.logging.client.file;
@@ -87,7 +107,7 @@ export class VanillaInstaller {
     if (v.assetIndex) {
       const idxPath = join(this.assetsDir(), 'indexes', `${v.assetIndex.id}.json`);
       await downloadFile({ url: v.assetIndex.url, dest: idxPath, sha1: v.assetIndex.sha1, signal });
-      const idx = JSON.parse(await fs.readFile(idxPath, 'utf8')) as { objects: Record<string, { hash: string; size: number }> };
+      const idx = JSON.parse(await fs.readFile(idxPath, 'utf8')) as { objects: Record<string, { hash: string; size: number }>; virtual?: boolean; map_to_resources?: boolean };
       const objs = [...new Map(Object.values(idx.objects).map((o) => [o.hash, o])).values()];
       let n = 0;
       await runPool(objs, 12, async (o) => {
@@ -95,9 +115,26 @@ export class VanillaInstaller {
         await downloadFile({ url: `${RESOURCES_URL}/${sub}`, dest: join(this.assetsDir(), 'objects', sub), sha1: o.hash, size: o.size, signal });
         if (++n % 25 === 0 || n === objs.length) progress?.('assets', n, objs.length);
       });
+      // very old versions (before 1.7.3) read sounds and textures by name, from a "virtual" copy
+      if (idx.virtual || idx.map_to_resources) {
+        const virt = join(this.assetsDir(), 'virtual', v.assetIndex.id);
+        for (const [name, o] of Object.entries(idx.objects)) {
+          const to = join(virt, name);
+          await fs.mkdir(join(to, '..'), { recursive: true });
+          await fs.copyFile(join(this.assetsDir(), 'objects', o.hash.slice(0, 2), o.hash), to).catch(() => undefined);
+        }
+      }
     }
     return v;
   }
+}
+
+export interface VersionEntry { id: string; type: 'release' | 'snapshot' | 'old_beta' | 'old_alpha'; releaseTime: string }
+
+/** All Minecraft versions Mojang publishes, newest first. */
+export async function listVersions(): Promise<{ latest: { release: string; snapshot: string }; versions: VersionEntry[] }> {
+  const m = await fetchJson<{ latest: { release: string; snapshot: string }; versions: VersionEntry[] }>(VERSION_MANIFEST_URL);
+  return { latest: m.latest, versions: m.versions.map(({ id, type, releaseTime }) => ({ id, type, releaseTime })) };
 }
 
 /** Resolve inheritsFrom chain (NeoForge -> vanilla) into one version description. */
@@ -119,6 +156,7 @@ export async function resolveVersion(inst: VanillaInstaller, id: string): Promis
     },
     assetIndex: child.assetIndex ?? parent.assetIndex,
     assets: child.assets ?? parent.assets,
+    minecraftArguments: child.minecraftArguments ?? parent.minecraftArguments,
     javaVersion: child.javaVersion ?? parent.javaVersion,
     logging: child.logging ?? parent.logging,
   };

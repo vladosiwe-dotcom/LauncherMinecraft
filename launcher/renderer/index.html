@@ -28,6 +28,7 @@
   <nav class="rail" aria-label="Main">
     <button type="button" class="rail__item is-active" data-view="home"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7v9h-6v-6H9v6H3z"/></svg><span data-i18n="nav.home"></span></button>
     <button type="button" class="rail__item" data-view="news"><svg viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 9h8M8 13h8M8 17h5"/></svg><span data-i18n="nav.news"></span></button>
+    <button type="button" class="rail__item" data-view="versions"><svg viewBox="0 0 24 24"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg><span data-i18n="nav.versions"></span></button>
     <button type="button" class="rail__item" data-view="server"><svg viewBox="0 0 24 24"><path d="M4 4h16v6H4zM4 14h16v6H4zM7 7h.01M7 17h.01M11 7h6M11 17h6"/></svg><span data-i18n="nav.server"></span></button>
     <button type="button" class="rail__item" data-view="settings"><svg viewBox="0 0 24 24"><path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7zM19 12l2-1-1-3-2 .3-1.4-1.4.3-2-3-1-1 2h-2l-1-2-3 1 .3 2L6 7.3 4 7 3 10l2 1v2l-2 1 1 3 2-.3 1.4 1.4-.3 2 3 1 1-2h2l1 2 3-1-.3-2 1.4-1.4 2 .3 1-3-2-1z"/></svg><span data-i18n="nav.settings"></span></button>
     <div class="rail__spacer"></div>
@@ -87,6 +88,23 @@
       </footer>
     </section>
 
+    <!-- VERSIONS -->
+    <section class="view view--versions" data-view="versions">
+      <header class="section-head"><h2 data-i18n="nav.versions"></h2></header>
+      <p class="hint" data-i18n="ver.intro"></p>
+      <div class="ver-account" id="verAccount"></div>
+      <div class="ver-tools">
+        <input type="search" id="verSearch" spellcheck="false" autocomplete="off" data-i18n-placeholder="ver.search">
+        <label class="switch"><input type="checkbox" id="verSnapshots"><span></span><b data-i18n="ver.snapshots"></b></label>
+        <label class="switch"><input type="checkbox" id="verInstalledOnly"><span></span><b data-i18n="ver.installedOnly"></b></label>
+      </div>
+      <div class="ver-progress" id="verProgress" hidden>
+        <div class="progress__label"><span id="verProgressStage"></span><span id="verProgressPct"></span></div>
+        <div class="progress__track"><i id="verProgressBar"></i></div>
+      </div>
+      <div class="ver-list" id="verList" role="list"></div>
+    </section>
+
     <!-- NEWS -->
     <section class="view view--news" data-view="news">
       <header class="section-head"><h2 data-i18n="news.title"></h2></header>
@@ -129,6 +147,7 @@
         <button type="button" role="tab" class="tab is-active" data-tab="game" data-i18n="settings.game"></button>
         <button type="button" role="tab" class="tab" data-tab="graphics" data-i18n="settings.graphics"></button>
         <button type="button" role="tab" class="tab" data-tab="language" data-i18n="settings.language"></button>
+        <button type="button" role="tab" class="tab" data-tab="connection" data-i18n="settings.connection"></button>
         <button type="button" role="tab" class="tab" data-tab="maintenance" data-i18n="settings.maintenance"></button>
       </div>
 
@@ -167,6 +186,22 @@
 
       <div class="tabpanel" data-tab="language">
         <div class="langs" id="langCards"></div>
+      </div>
+
+      <div class="tabpanel" data-tab="connection">
+        <div class="field">
+          <label for="azureClientId" data-i18n="conn.client"></label>
+          <input type="text" id="azureClientId" spellcheck="false" autocomplete="off" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+          <p class="hint" data-i18n="conn.client.d"></p>
+          <p class="hint"><button type="button" class="link" data-open="https://learn.microsoft.com/entra/identity-platform/quickstart-register-app" data-i18n="conn.client.how"></button></p>
+          <p class="hint" id="clientState"></p>
+        </div>
+        <div class="field">
+          <label for="apiBase" data-i18n="conn.api"></label>
+          <input type="url" id="apiBase" spellcheck="false" autocomplete="off" placeholder="https://rift.example.org">
+          <p class="hint" data-i18n="conn.api.d"></p>
+          <p class="hint" id="apiState"></p>
+        </div>
       </div>
 
       <div class="tabpanel" data-tab="maintenance">

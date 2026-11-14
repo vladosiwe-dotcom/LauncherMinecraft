@@ -13,6 +13,7 @@
   function applyI18n() {
     document.documentElement.lang = state.lang === 'uk' ? 'uk' : state.lang;
     $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+    $$('[data-i18n-placeholder]').forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
     $('#langSwitch').innerHTML = ['ru', 'uk', 'en'].map((l) => `<button type="button" data-lang="${l}" class="${l === state.lang ? 'is-active' : ''}">${l === 'uk' ? 'ua' : l}</button>`).join('');
     if (sir.demo) { const b = $('#demoBanner'); b.hidden = false; b.textContent = t('demo.banner'); }
   }
@@ -142,6 +143,10 @@
     $('#fullscreen').checked = s.fullscreen; $('#closeOnLaunch').checked = s.closeOnLaunch;
     $('#installDir').textContent = s.installDir; $('#channel').value = s.channel;
     $('#presetAuto').checked = !s.presetIsManual;
+    if (document.activeElement !== $('#azureClientId')) $('#azureClientId').value = s.azureClientId ?? '';
+    if (document.activeElement !== $('#apiBase')) $('#apiBase').value = s.apiBase ?? '';
+    $('#clientState').textContent = state.clientIdSet ? `✓ ${t('conn.ok')}` : t('conn.missing');
+    $('#apiState').textContent = state.backend ? `✓ ${t('conn.ok')}` : t('conn.api.missing');
     renderGraphics(); renderLangs();
   }
 
@@ -495,10 +500,97 @@
   };
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#updateModal').hidden && !updBusy) $('#updateModal').hidden = true; });
 
+  // ---------- connection settings ----------
+  async function refreshFlags() {
+    const st = await call(sir.state());
+    Object.assign(state, { owner: st.owner, backend: st.backend, clientIdSet: st.clientIdSet });
+    renderSettings(); renderVersions();
+  }
+  $('#azureClientId').addEventListener('change', (e) => save({ azureClientId: e.target.value.trim() }).then(refreshFlags));
+  $('#apiBase').addEventListener('change', (e) => save({ apiBase: e.target.value.trim().replace(/\/$/, '') }).then(() => { refreshFlags(); loadServer(); loadNews(); loadUpdate(); loadAccount(); }));
+  document.addEventListener('click', (e) => { const o = e.target.closest('[data-open]'); if (o) sir.openUrl(o.dataset.open); });
+
+  // ---------- versions: any Minecraft version from Mojang ----------
+  const ver = { list: null, installed: [], latest: null, busyId: null, confirm: null, offline: false, loading: false };
+  const fmtDate = (d) => new Date(d).toLocaleDateString(state.lang === 'en' ? 'en-GB' : state.lang);
+  async function loadVersions() {
+    if (ver.loading) return;
+    ver.loading = true; renderVersions();
+    try {
+      const r = await call(sir.versions());
+      Object.assign(ver, { list: r.versions, installed: r.installed.map((v) => v.id), latest: r.latest });
+    } catch (e) { showError(e, loadVersions); }
+    finally { ver.loading = false; renderVersions(); }
+  }
+  function renderVersions() {
+    const box = $('#verAccount'); if (!box || !state.settings) return;
+    $('#verSnapshots').checked = !!state.settings.showSnapshots;
+    if (!state.session && !state.owner) {
+      box.innerHTML = `<span>${esc(t('ver.noAccount'))}</span> <button type="button" class="btn" id="verLogin">${esc(t('ver.login'))}</button>`;
+      $('#verLogin').onclick = () => login();
+    } else {
+      if (!state.session) ver.offline = true;
+      box.innerHTML = `<span>${esc(ver.offline ? t('ver.offlineAs', { name: state.owner?.name ?? '', date: state.owner ? fmtDate(state.owner.verifiedAt) : '' }) : t('ver.asMs', { name: state.session?.name ?? '' }))}</span>`
+        + (state.owner ? ` <label class="switch"><input type="checkbox" id="verOffline" ${ver.offline ? 'checked' : ''} ${state.session ? '' : 'disabled'}><span></span><b>${esc(t('ver.offline'))}</b></label>` : '');
+      const o = $('#verOffline'); if (o) o.onchange = (e) => { ver.offline = e.target.checked; renderVersions(); };
+    }
+    const list = $('#verList');
+    if (!ver.list) { list.innerHTML = `<p class="hint">${esc(t(ver.loading ? 'ver.loading' : 'ver.empty'))}</p>`; return; }
+    const q = $('#verSearch').value.trim().toLowerCase();
+    const onlyInst = $('#verInstalledOnly').checked;
+    const rows = ver.list.filter((v) => (v.type === 'release' || (v.type === 'snapshot' && state.settings.showSnapshots))
+      && (!q || v.id.toLowerCase().includes(q)) && (!onlyInst || ver.installed.includes(v.id))).slice(0, 150);
+    if (!rows.length) { list.innerHTML = `<p class="hint">${esc(t('ver.empty'))}</p>`; return; }
+    list.innerHTML = rows.map((v) => {
+      const inst = ver.installed.includes(v.id), busy = ver.busyId === v.id, locked = !!ver.busyId || state.running;
+      const tag = v.id === ver.latest?.release || v.id === ver.latest?.snapshot ? `<span class="pill is-ok">${esc(t('ver.latest'))}</span>` : '';
+      const meta = `${esc(t(v.type === 'snapshot' ? 'ver.snapshot' : 'ver.release'))} · ${esc(fmtDate(v.releaseTime))}${inst ? ` · ${esc(t('ver.installed'))}` : ''}`;
+      const side = inst
+        ? `<button type="button" class="btn btn--ghost" data-vact="folder">${esc(t('ver.folder'))}</button><button type="button" class="btn btn--ghost" data-vact="remove" ${locked ? 'disabled' : ''}>${esc(ver.confirm === v.id ? t('ver.removeConfirm', { id: v.id }) : t('ver.remove'))}</button>`
+        : `<button type="button" class="btn" data-vact="install" ${locked ? 'disabled' : ''}>${esc(busy ? '…' : t('ver.install'))}</button>`;
+      return `<div class="ver-row" role="listitem" data-id="${esc(v.id)}">
+        <div class="ver-row__name"><b>${esc(v.id)}</b> ${tag}<small>${meta}</small></div>
+        <div class="ver-row__actions">${side}<button type="button" class="btn btn--gold" data-vact="play" ${locked ? 'disabled' : ''}>${esc(busy ? '…' : t('ver.play'))}</button></div></div>`;
+    }).join('');
+  }
+  async function versionAction(id, act) {
+    if (act === 'folder') { try { await call(sir.openVersionDir(id)); } catch (e) { showError(e); } return; }
+    if (act === 'remove') {
+      if (ver.confirm !== id) { ver.confirm = id; renderVersions(); setTimeout(() => { if (ver.confirm === id) { ver.confirm = null; renderVersions(); } }, 4000); return; }
+      ver.confirm = null;
+      try { ver.installed = (await call(sir.removeVersion(id, false))).map((v) => v.id); } catch (e) { showError(e); }
+      renderVersions(); return;
+    }
+    if (act === 'play' && !state.session && !state.owner) { login(); return; }
+    ver.busyId = id; renderVersions();
+    try {
+      if (act === 'install') ver.installed = (await call(sir.installVersion(id))).map((v) => v.id);
+      else { await call(sir.playVersion(id, ver.offline || !state.session)); if (!ver.installed.includes(id)) ver.installed.push(id); }
+    } catch (e) { showError(e, () => versionAction(id, act)); }
+    finally { ver.busyId = null; $('#verProgress').hidden = true; renderVersions(); }
+  }
+  $('#verList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-vact]'); if (!b || b.disabled) return;
+    versionAction(b.closest('[data-id]').dataset.id, b.dataset.vact);
+  });
+  $('#verSearch').addEventListener('input', renderVersions);
+  $('#verInstalledOnly').addEventListener('change', renderVersions);
+  $('#verSnapshots').addEventListener('change', (e) => save({ showSnapshots: e.target.checked }).then(renderVersions));
+  sir.onProgress((p) => {
+    if (!ver.busyId) return;
+    const pct = p.total ? Math.floor((p.done / p.total) * 100) : 0;
+    $('#verProgress').hidden = false;
+    $('#verProgressStage').textContent = `${ver.busyId} · ${t(`ver.stage.${p.stage}`)}${p.detail ? ` · ${p.detail}` : ''}`;
+    $('#verProgressPct').textContent = `${pct}%`;
+    $('#verProgressBar').style.width = `${pct}%`;
+  });
+  $$('.rail__item[data-view="versions"]').forEach((b) => b.addEventListener('click', () => { if (!ver.list) loadVersions(); }));
+  sir.onSession(() => { refreshFlags().catch(() => undefined); });
+
   // ---------- boot ----------
   (async () => {
     const st = await call(sir.state());
-    Object.assign(state, { settings: st.settings, session: st.session, installed: st.installed, running: st.gameRunning, lang: st.settings.language, totalRamMb: st.totalRamMb });
+    Object.assign(state, { settings: st.settings, session: st.session, installed: st.installed, running: st.gameRunning, lang: st.settings.language, totalRamMb: st.totalRamMb, owner: st.owner, backend: st.backend, clientIdSet: st.clientIdSet });
     applyI18n(); renderAll();
     setAuthMode('login'); loadAccount();
     loadServer(); loadNews(); loadUpdate(); detectHw(); checkLauncherUpdate();

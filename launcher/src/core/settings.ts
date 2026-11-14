@@ -24,6 +24,11 @@ export interface LauncherSettings {
   serverPort: number;
   serverMemoryMb: number;
   eulaAccepted: boolean;
+  /** Overrides of launcher/config/app.json, set in Settings → Connection (empty = use the built-in value). */
+  azureClientId: string;
+  apiBase: string;
+  /** Show snapshots in the Versions tab. */
+  showSnapshots: boolean;
 }
 
 export function defaultSettings(baseDir: string, ramMb: number): LauncherSettings {
@@ -33,6 +38,7 @@ export function defaultSettings(baseDir: string, ramMb: number): LauncherSetting
     javaPath: null, jvmArgs: '', width: 1600, height: 900, fullscreen: false,
     preset: null, presetIsManual: false, language: 'ru', channel: 'stable', closeOnLaunch: false,
     testMode: false, testNick: '', serverPort: 25565, serverMemoryMb: ramMb >= 16000 ? 6144 : 4096, eulaAccepted: false,
+    azureClientId: '', apiBase: '', showSnapshots: false,
   };
 }
 
@@ -47,6 +53,8 @@ export function validateSettings(s: Partial<LauncherSettings>, totalRamMb: numbe
   if (s.testNick !== undefined && s.testNick !== '' && !/^[A-Za-z0-9_]{3,16}$/.test(s.testNick)) errs.push('testNick');
   if (s.serverPort !== undefined && (!Number.isInteger(s.serverPort) || s.serverPort < 1024 || s.serverPort > 65535)) errs.push('serverPort');
   if (s.serverMemoryMb !== undefined && (s.serverMemoryMb < 2048 || s.serverMemoryMb > Math.max(2048, totalRamMb - 2048))) errs.push('serverMemoryMb');
+  if (s.azureClientId !== undefined && s.azureClientId !== '' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.azureClientId)) errs.push('azureClientId');
+  if (s.apiBase !== undefined && s.apiBase !== '' && !/^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(s.apiBase)) errs.push('apiBase');
   return errs;
 }
 

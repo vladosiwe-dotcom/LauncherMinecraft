@@ -1,13 +1,16 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, promises as fs } from 'node:fs';
 import { delimiter, join } from 'node:path';
-import { mavenPath, rulesAllow, type Argument, type VersionJson } from './mojang.js';
+import { currentOs, mavenPath, nativeArtifact, rulesAllow, type Argument, type VersionJson } from './mojang.js';
+import { extractZip } from './zip.js';
 
 export interface LaunchProfile {
   name: string;
   uuid: string;
   accessToken: string;
   xuid: string;
+  /** 'msa' for a Microsoft account; 'legacy' when playing offline. */
+  userType?: 'msa' | 'legacy';
 }
 
 export interface LaunchOptions {
@@ -23,6 +26,29 @@ export interface LaunchOptions {
   extraJvmArgs?: string[];
   launcherVersion: string;
   clientId?: string;
+}
+
+/** JVM arguments of versions before 1.13, whose version file does not list them. */
+function legacyJvm(): string[] {
+  const a = ['-Djava.library.path=${natives_directory}', '-cp', '${classpath}'];
+  if (currentOs() === 'osx') a.unshift('-XstartOnFirstThread');
+  if (currentOs() === 'windows') a.unshift('-XX:HeapDumpPath=MojangTricksIntelDriversForPerformance_javaw.exe_minecraft.exe.heapdump');
+  return a;
+}
+
+/** Unpack the native libraries of older versions (LWJGL 2/3 "natives-*" jars) into the natives folder. */
+export async function extractNatives(o: { root: string; version: VersionJson }): Promise<number> {
+  const dir = join(o.root, 'natives', o.version.id);
+  let n = 0;
+  for (const lib of o.version.libraries) {
+    if (!rulesAllow(lib.rules)) continue;
+    const a = nativeArtifact(lib);
+    if (!a) continue;
+    const jar = join(o.root, 'libraries', a.path);
+    if (!existsSync(jar)) throw new Error(`Missing native library ${a.path}. Run repair.`);
+    n += (await extractZip(jar, dir, lib.extract?.exclude ?? ['META-INF/'])).length;
+  }
+  return n;
 }
 
 function expand(args: Argument[] | undefined, features: Record<string, boolean>): string[] {
@@ -47,6 +73,8 @@ export function buildCommand(o: LaunchOptions): { args: string[]; classpath: str
   const cp: string[] = [];
   for (const lib of v.libraries) {
     if (!rulesAllow(lib.rules)) continue;
+    // a library that only ships native jars (older LWJGL) is extracted, not put on the class path
+    if (!lib.downloads?.artifact && lib.natives) continue;
     const rel = lib.downloads?.artifact?.path ?? mavenPath(lib.name);
     const p = join(libDir, rel);
     if (!cp.includes(p)) cp.push(p);
@@ -67,8 +95,11 @@ export function buildCommand(o: LaunchOptions): { args: string[]; classpath: str
     auth_access_token: o.profile.accessToken,
     clientid: o.clientId ?? '',
     auth_xuid: o.profile.xuid,
-    user_type: 'msa',
-    version_type: 'release',
+    user_type: o.profile.userType ?? 'msa',
+    version_type: v.type ?? 'release',
+    auth_session: `token:${o.profile.accessToken}:${o.profile.uuid}`,
+    user_properties: '{}',
+    game_assets: join(o.root, 'assets', 'virtual', v.assetIndex?.id ?? v.assets ?? 'legacy'),
     natives_directory: join(o.root, 'natives', v.id),
     launcher_name: 'spell-and-iron-rift',
     launcher_version: o.launcherVersion,
@@ -84,16 +115,18 @@ export function buildCommand(o: LaunchOptions): { args: string[]; classpath: str
     `-Xmx${o.memoryMb}M`, `-Xms${Math.min(o.memoryMb, 1024)}M`,
     '-XX:+UseG1GC', '-XX:MaxGCPauseMillis=50', '-XX:+UnlockExperimentalVMOptions', '-XX:G1NewSizePercent=20', '-XX:G1ReservePercent=20',
     ...sanitizeJvmArgs(o.extraJvmArgs ?? []),
-    ...expand(v.arguments?.jvm, features).map(sub),
+    ...(v.arguments?.jvm ? expand(v.arguments.jvm, features) : legacyJvm()).map(sub),
   ];
   if (v.logging?.client) jvm.push(sub(v.logging.client.argument.replace('${path}', join(o.root, 'assets', 'log_configs', v.logging.client.file.id))));
-  const game = expand(v.arguments?.game, features).map(sub);
+  const game = (v.arguments?.game?.length ? expand(v.arguments.game, features) : (v.minecraftArguments ?? '').split(/\s+/).filter(Boolean)).map(sub);
+  if (!v.arguments?.game?.length && customRes) game.push('--width', vars.resolution_width!, '--height', vars.resolution_height!);
   if (o.fullscreen) game.push('--fullscreen');
   return { args: [...jvm, v.mainClass, ...game], classpath: cp };
 }
 
 export async function launch(o: LaunchOptions, onLog: (line: string) => void): Promise<ChildProcess> {
   await fs.mkdir(join(o.root, 'natives', o.version.id), { recursive: true });
+  await extractNatives(o);
   await fs.mkdir(o.gameDir, { recursive: true });
   const missing = buildCommand(o).classpath.filter((p) => !existsSync(p));
   if (missing.length) throw new Error(`Missing ${missing.length} libraries (first: ${missing[0]}). Run repair.`);

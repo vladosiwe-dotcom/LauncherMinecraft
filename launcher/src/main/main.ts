@@ -6,6 +6,7 @@ import { GRAPHICS_PRESETS, recommendPreset, recommendHeapMb, type GraphicsPreset
 import { RiftApi } from '../core/api.js';
 import { AuthError, MicrosoftAuth, type MinecraftSession } from '../core/auth.js';
 import { GameManager } from '../core/game.js';
+import { VersionLibrary } from '../core/versions.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
 import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
@@ -14,6 +15,10 @@ import { AccountService } from './accounts.js';
 import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
+import { EnvHttpProxyAgent, setGlobalDispatcher } from 'undici';
+
+// Players behind a proxy (HTTPS_PROXY / HTTP_PROXY / NO_PROXY): downloads and sign-in go through it.
+if (process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy) setGlobalDispatcher(new EnvHttpProxyAgent());
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(here, '..', '..');
@@ -61,8 +66,27 @@ async function loadRefreshToken(): Promise<string | null> {
   try { return safeStorage.decryptString(await fs.readFile(vaultPath())); } catch { return null; }
 }
 
-function auth() { return new MicrosoftAuth(config.azureClientId); }
-function api() { return new RiftApi(config.apiBase); }
+/** Values from Settings → Connection win over the built-in launcher/config/app.json. */
+const clientId = () => settings.azureClientId || config.azureClientId;
+const apiBase = () => settings.apiBase || config.apiBase;
+/** The built-in address is a placeholder until the project server is deployed. */
+function backendConfigured(): boolean {
+  try { const h = new URL(apiBase()).hostname; return !!h && !/(^|\.)example\.(org|com|net)$/.test(h); } catch { return false; }
+}
+function auth() { return new MicrosoftAuth(clientId()); }
+function api() {
+  if (!backendConfigured()) throw Object.assign(new Error('project server address is not set'), { code: 'no_backend' });
+  return new RiftApi(apiBase());
+}
+
+/** The Minecraft profile last verified through Microsoft (the game is owned): allows offline play of versions. */
+const ownerPath = () => join(app.getPath('userData'), 'owner.json');
+async function rememberOwner(s: MinecraftSession) {
+  await fs.writeFile(ownerPath(), JSON.stringify({ name: s.name, uuid: s.uuid, verifiedAt: new Date().toISOString() }));
+}
+async function loadOwner(): Promise<{ name: string; uuid: string; verifiedAt: string } | null> {
+  try { const o = JSON.parse(await fs.readFile(ownerPath(), 'utf8')); return o?.name && o?.uuid ? o : null; } catch { return null; }
+}
 
 async function restoreSession(): Promise<void> {
   const rt = await loadRefreshToken();
@@ -71,6 +95,7 @@ async function restoreSession(): Promise<void> {
     const t = await auth().refresh(rt);
     await saveRefreshToken(t.refreshToken);
     session = await auth().minecraftLogin(t.accessToken);
+    await rememberOwner(session);
   } catch (e) {
     await log(`session restore failed: ${(e as Error).message}`);
     if (e instanceof AuthError && e.code === 'expired') await saveRefreshToken(null);
@@ -90,7 +115,9 @@ function publicSession() {
 
 function errorPayload(e: unknown) {
   if (e instanceof RiftAccountError) return { code: `account.${e.code}`, message: e.reason ?? e.message };
-  if (e instanceof AuthError) return { code: `auth.${e.code}`, message: e.message };
+  if (e instanceof AuthError) return { code: /client id is not configured/.test(e.message) ? 'auth.no_client' : `auth.${e.code}`, message: e.message };
+  if ((e as { code?: string })?.code === 'no_backend') return { code: 'no_backend', message: (e as Error).message };
+  if ((e as { code?: string })?.code === 'need_account') return { code: 'versions.need_account', message: (e as Error).message };
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
@@ -136,13 +163,13 @@ function testProfile() {
 function registerIpc() {
   handle('app:state', async () => {
     const st = await new GameManager(settings, config.trustedManifestKeys).updater.loadState();
-    return { version: VERSION, settings, session: publicSession(), hardware, presets: Object.keys(GRAPHICS_PRESETS), installed: st, gameRunning, platform: process.platform, totalRamMb: Math.round(os.totalmem() / 1048576) };
+    return { version: VERSION, settings, session: publicSession(), owner: await loadOwner(), backend: backendConfigured(), clientIdSet: /^[0-9a-f-]{36}$/i.test(clientId()) && !/^0{8}-/.test(clientId()), hardware, presets: Object.keys(GRAPHICS_PRESETS), installed: st, gameRunning, platform: process.platform, totalRamMb: Math.round(os.totalmem() / 1048576) };
   });
 
   handle('settings:save', async (patch: Partial<LauncherSettings>) => {
     const errs = validateSettings(patch, Math.round(os.totalmem() / 1048576));
     if (errs.length) throw new Error(`invalid settings: ${errs.join(', ')}`);
-    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir'];
+    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots'];
     for (const k of allowed) if (k in patch) (settings as any)[k] = (patch as any)[k];
     await settingsStore.save(settings);
     return settings;
@@ -165,6 +192,7 @@ function registerIpc() {
     const t = await a.pollDeviceCode(dc, busy.signal);
     session = await a.minecraftLogin(t.accessToken);
     await saveRefreshToken(t.refreshToken);
+    await rememberOwner(session);
     return publicSession();
   });
   handle('auth:cancel', async () => { busy?.abort(); return true; });
@@ -185,14 +213,14 @@ function registerIpc() {
   handle('myserver:install', async (eula: boolean) => {
     if (eula !== true) throw Object.assign(new Error('Minecraft EULA not accepted'), { code: 'eula' });
     if (!settings.eulaAccepted) { settings.eulaAccepted = true; await settingsStore.save(settings); }
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
+    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
     const manifest = gm.updater.accept(await api().manifest(settings.channel), config.trustedManifestKeys, { allowHttp: config.allowInsecureLocalApi });
     const javaExe = await gm.javaExe(manifest.java.mojangComponent);
     await myServer().install(manifest, javaExe, serverOptions(), true, (done, total, detail) => send('progress', { stage: 'server', done, total, detail }));
     return true;
   });
   handle('myserver:start', async () => {
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
+    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
     const build = await myServer().installedBuild();
     if (!build) throw Object.assign(new Error('install the server first'), { code: 'server_missing' });
     await myServer().start(await gm.javaExe('java-runtime-delta'), serverOptions());
@@ -239,12 +267,12 @@ function registerIpc() {
     if (!settings.testMode) await accounts.readyToPlay({ name: s.name, uuid: s.uuid, accessToken: s.accessToken });
     busy?.abort(); busy = new AbortController();
     const signed: SignedManifest = await api().manifest(settings.channel);
-    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
+    const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, apiBase());
     const fromGame = await gm.inGamePresetRequest();
     if (fromGame && fromGame !== settings.preset) { settings.preset = fromGame; settings.presetIsManual = true; await settingsStore.save(settings); }
     const { versionId, javaExe } = await gm.prepare(signed, currentPreset(), (p) => send('progress', p), busy.signal);
     send('progress', { stage: 'launch', done: 0, total: 1 });
-    const child = await gm.launch(versionId, javaExe, { name: s.name, uuid: s.uuid, accessToken: s.accessToken, xuid: s.xuid }, (l) => { void log(`[game] ${l}`); }, VERSION, config.azureClientId);
+    const child = await gm.launch(versionId, javaExe, { name: s.name, uuid: s.uuid, accessToken: s.accessToken, xuid: s.xuid }, (l) => { void log(`[game] ${l}`); }, VERSION, clientId());
     gameRunning = true;
     send('game:state', { running: true });
     if (settings.closeOnLaunch) win?.hide();
@@ -264,11 +292,58 @@ function registerIpc() {
     const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi);
     return gm.updater.rollback((p) => send('progress', { stage: 'pack', done: p.doneBytes, total: p.totalBytes, detail: p.phase }));
   });
+  // ---- Versions: any Minecraft version from Mojang, played with the Microsoft account (or offline by its owner)
+  let versionCache: { at: number; data: Awaited<ReturnType<VersionLibrary['available']>> } | null = null;
+  handle('versions:list', async () => {
+    const lib = new VersionLibrary(settings);
+    if (!versionCache || Date.now() - versionCache.at > 10 * 60_000) versionCache = { at: Date.now(), data: await lib.available() };
+    return { ...versionCache.data, installed: await lib.installed() };
+  });
+  handle('versions:install', async (id: string) => {
+    busy?.abort(); busy = new AbortController();
+    const lib = new VersionLibrary(settings);
+    await lib.install(id, (p) => send('progress', p), busy.signal);
+    await lib.java(id, (p) => send('progress', p), busy.signal);
+    return lib.installed();
+  });
+  handle('versions:remove', async (id: string, withWorlds: boolean) => {
+    if (gameRunning) throw Object.assign(new Error('game is running'), { code: 'game_running' });
+    const lib = new VersionLibrary(settings);
+    await lib.remove(id, !!withWorlds);
+    return lib.installed();
+  });
+  handle('versions:openDir', async (id: string) => {
+    const dir = new VersionLibrary(settings).gameDir(id);
+    await fs.mkdir(dir, { recursive: true });
+    return shell.openPath(dir);
+  });
+  handle('versions:play', async (id: string, offline: boolean) => {
+    if (gameRunning) throw Object.assign(new Error('game already running'), { code: 'game_running' });
+    let profile: { name: string; uuid: string; accessToken: string; xuid: string; userType: 'msa' | 'legacy' };
+    if (offline) {
+      // offline only for the owner of the game: the profile Microsoft confirmed earlier on this PC
+      const o = await loadOwner();
+      if (!o) throw Object.assign(new Error('sign in with Microsoft once to play offline'), { code: 'need_account' });
+      profile = { name: o.name, uuid: o.uuid, accessToken: '0', xuid: '0', userType: 'legacy' };
+    } else {
+      const s = await ensureFreshSession().catch(() => null);
+      if (!s) throw Object.assign(new Error('sign in with Microsoft to play'), { code: 'need_account' });
+      profile = { name: s.name, uuid: s.uuid, accessToken: s.accessToken, xuid: s.xuid, userType: 'msa' };
+    }
+    busy?.abort(); busy = new AbortController();
+    const child = await new VersionLibrary(settings).play(id, profile, (l) => { void log(`[game ${id}] ${l}`); }, VERSION, clientId(), (p) => send('progress', p), busy.signal);
+    gameRunning = true;
+    send('game:state', { running: true });
+    if (settings.closeOnLaunch) win?.hide();
+    child.on('exit', (code) => { gameRunning = false; send('game:state', { running: false, exitCode: code }); win?.show(); });
+    return true;
+  });
+
   handle('shell:openGameDir', async () => { await fs.mkdir(join(settings.installDir, 'game'), { recursive: true }); return shell.openPath(join(settings.installDir, 'game')); });
   handle('shell:openLogs', async () => shell.openPath(dirname(logFile())));
   handle('shell:openUrl', async (url: string) => {
     const u = new URL(url);
-    const allowed = ['microsoft.com', 'live.com', 'minecraft.net', new URL(config.apiBase).hostname];
+    const allowed = ['microsoft.com', 'live.com', 'minecraft.net', ...(backendConfigured() ? [new URL(apiBase()).hostname] : []), 'mojang.com', 'learn.microsoft.com', 'portal.azure.com', 'entra.microsoft.com'];
     if (u.protocol !== 'https:' || !allowed.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) throw new Error('blocked url');
     await shell.openExternal(u.toString());
     return true;
@@ -302,7 +377,7 @@ app.whenReady().then(async () => {
   settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'), defaultSettings(app.getPath('appData'), Math.round(os.totalmem() / 1048576)));
   settings = await settingsStore.load();
   registerIpc();
-  accounts = new AccountService({ apiBase: config.apiBase, allowInsecureLocal: config.allowInsecureLocalApi, userData: app.getPath('userData'), handle, send, log });
+  accounts = new AccountService({ apiBase: () => (backendConfigured() ? apiBase() : ''), allowInsecureLocal: config.allowInsecureLocalApi, userData: app.getPath('userData'), handle, send, log });
   accounts.register();
   await accounts.restore();
   await createWindow();

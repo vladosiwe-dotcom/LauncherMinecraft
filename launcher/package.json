@@ -13,16 +13,17 @@
     "dist": "npm run build && electron-builder"
   },
   "dependencies": {
-    "@sir/shared": "0.1.0"
+    "@sir/shared": "0.1.0",
+    "undici": "6.21.0"
   },
   "devDependencies": {
+    "@fontsource/cormorant-sc": "^5.1.0",
+    "@fontsource/press-start-2p": "^5.1.0",
+    "@fontsource/rubik": "^5.1.0",
+    "@types/node": "^22.10.0",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
-    "typescript": "^5.6.3",
-    "@types/node": "^22.10.0",
-    "@fontsource/cormorant-sc": "^5.1.0",
-    "@fontsource/rubik": "^5.1.0",
-    "@fontsource/press-start-2p": "^5.1.0"
+    "typescript": "^5.6.3"
   },
   "build": {
     "appId": "org.spellandironrift.launcher",
