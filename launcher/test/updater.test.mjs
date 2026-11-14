@@ -25,7 +25,8 @@ before(async () => {
     res.writeHead(m ? 206 : 200, { 'Content-Length': chunk.length, ...(m ? { 'Content-Range': `bytes ${start}-${body.length - 1}/${body.length}` } : {}) });
     if (dropFirstConnection.has(req.url)) {
       dropFirstConnection.delete(req.url);
-      res.write(chunk.subarray(0, Math.floor(chunk.length / 2)), () => res.destroy());
+      // drop the connection a moment after half the body went out, so the client has saved that half
+      res.write(chunk.subarray(0, Math.floor(chunk.length / 2)), () => setTimeout(() => res.destroy(), 300));
       return;
     }
     res.end(chunk);
