@@ -9,6 +9,9 @@ import { GameManager } from '../core/game.js';
 import { fetchJson } from '../core/http.js';
 import { VersionLibrary } from '../core/versions.js';
 import { startEmbedded, type EmbeddedBackend } from '@sir/backend/embedded';
+import { Tunnel } from '../core/tunnel.js';
+import { decodeInvite, encodeInvite } from '../core/invite.js';
+import { ping as slpPing } from '../core/slp.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
 import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
@@ -86,6 +89,8 @@ async function ensurePinned() {
   if (owner || !backendConfigured() || settings.pinnedKeys?.[apiBase()] || config.trustedManifestKeys.length) return;
   const k = await fetchJson<{ publicPem: string; keyId: string }>(`${apiBase()}/api/public/key`, { retries: 1, timeoutMs: 10000 });
   if (!/^-----BEGIN PUBLIC KEY-----/.test(k.publicPem)) throw new Error('server returned no signing key');
+  const expected = settings.expectedKeyIds?.[apiBase()];
+  if (expected && expected !== k.keyId) throw Object.assign(new Error(`server key ${k.keyId} does not match the invite (${expected})`), { code: 'invite_key_mismatch' });
   settings.pinnedKeys = { ...(settings.pinnedKeys ?? {}), [apiBase()]: k.publicPem };
   await settingsStore.save(settings);
 }
@@ -114,6 +119,32 @@ async function writeGuardConfig() {
   await fs.writeFile(f, JSON.stringify({ ...cur, apiBase: owner.url, serverKey: owner.serverKey }, null, 2));
 }
 async function stopOwner() { const o = owner; owner = null; await o?.close(); }
+
+// ---- Cloudflare Tunnel: makes the build server reachable for friends (variant B)
+const tunnel = new Tunnel(join(app.getPath('userData'), 'bin'));
+tunnel.on('state', (st: string) => send('tunnel:state', st));
+tunnel.on('url', async (url: string) => {
+  // quick tunnels get a new address each start: download links in the manifest must follow it
+  if (settings.tunnelMode !== 'quick' || settings.ownerPublicUrl === url) return;
+  settings.ownerPublicUrl = url; await settingsStore.save(settings);
+  if (owner) { await stopOwner(); await startOwner(); }
+  send('tunnel:url', url);
+});
+const tokenPath = () => join(app.getPath('userData'), 'tunnel-token.bin');
+async function loadTunnelToken(): Promise<string | null> {
+  try { return safeStorage.decryptString(await fs.readFile(tokenPath())); } catch { return null; }
+}
+async function startTunnel() {
+  await tunnel.start({ mode: settings.tunnelMode, localPort: settings.ownerPort, token: (await loadTunnelToken()) ?? undefined });
+}
+function tunnelState() {
+  return { state: tunnel.state, url: settings.tunnelMode === 'quick' ? tunnel.url : settings.ownerPublicUrl || null, mode: settings.tunnelMode, auto: settings.tunnelAuto, log: tunnel.history().slice(-30) };
+}
+function inviteCode(): string | null {
+  if (!owner || !settings.ownerPublicUrl.startsWith('https://')) return null;
+  if (settings.tunnelMode === 'quick' && (tunnel.state !== 'running' || tunnel.url !== settings.ownerPublicUrl)) return null; // the address changes
+  return encodeInvite({ api: settings.ownerPublicUrl, game: settings.gameAddress, keyId: owner.keyId });
+}
 async function ownerState() {
   return { enabled: settings.ownerMode, running: !!owner, url: owner?.url ?? null, panel: owner ? `${owner.url}/admin/` : null,
     keyId: owner?.keyId ?? null, hasOwner: owner ? await owner.hasOwner() : false, publicUrl: settings.ownerPublicUrl, gameAddress: settings.gameAddress, port: settings.ownerPort };
@@ -166,7 +197,7 @@ function publicSession() {
 function errorPayload(e: unknown) {
   if (e instanceof RiftAccountError) return { code: `account.${e.code}`, message: e.reason ?? e.message };
   if (e instanceof AuthError) return { code: /client id is not configured/.test(e.message) ? 'auth.no_client' : `auth.${e.code}`, message: e.message };
-  for (const c of ['owner_name', 'owner_password', 'owner_exists']) if ((e as { code?: string })?.code === c) return { code: c, message: (e as Error).message };
+  for (const c of ['owner_name', 'owner_password', 'owner_exists', 'invite_bad', 'invite_key_mismatch', 'tunnel_token', 'tunnel_platform']) if ((e as { code?: string })?.code === c) return { code: c, message: (e as Error).message };
   if ((e as { code?: string })?.code === 'no_backend') return { code: 'no_backend', message: (e as Error).message };
   if ((e as { code?: string })?.code === 'need_account') return { code: 'versions.need_account', message: (e as Error).message };
   const msg = (e as Error)?.message ?? String(e);
@@ -174,6 +205,7 @@ function errorPayload(e: unknown) {
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
   for (const c of ['eula', 'server_running', 'server_missing', 'test_nick', 'no_world']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
   if (/ENOSPC/.test(msg)) return { code: 'disk.full', message: msg };
+  if (/secure storage is unavailable/.test(msg)) return { code: 'secure_storage', message: msg };
   if (/fetch failed|network|ENOTFOUND|ECONNRE|timed? ?out/i.test(msg)) return { code: 'network', message: msg };
   if (/signature/.test(msg)) return { code: 'manifest.signature', message: msg };
   return { code: 'unknown', message: msg };
@@ -220,7 +252,7 @@ function registerIpc() {
   handle('settings:save', async (patch: Partial<LauncherSettings>) => {
     const errs = validateSettings(patch, Math.round(os.totalmem() / 1048576));
     if (errs.length) throw new Error(`invalid settings: ${errs.join(', ')}`);
-    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort', 'ownerPort', 'ownerPublicUrl', 'gameAddress'];
+    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'azureClientId', 'apiBase', 'showSnapshots', 'serverMemoryMb', 'serverPort', 'ownerPort', 'ownerPublicUrl', 'gameAddress', 'tunnelMode', 'tunnelAuto'];
     for (const k of allowed) if (k in patch) (settings as any)[k] = (patch as any)[k];
     await settingsStore.save(settings);
     return settings;
@@ -417,14 +449,55 @@ function registerIpc() {
   handle('owner:enable', async () => {
     settings.ownerMode = true; await settingsStore.save(settings);
     await startOwner();
+    if (settings.tunnelAuto) await startTunnel().catch((e) => log(`tunnel: ${(e as Error).message}`));
     return ownerState();
   });
-  handle('owner:disable', async () => { settings.ownerMode = false; await settingsStore.save(settings); await stopOwner(); return ownerState(); });
+  handle('owner:disable', async () => { settings.ownerMode = false; await settingsStore.save(settings); await tunnel.stop(); await stopOwner(); return ownerState(); });
   handle('owner:restart', async () => { await stopOwner(); await startOwner(); return ownerState(); });
   handle('owner:create', async (username: string, password: string) => {
     if (!owner) throw new Error('owner mode is off');
     await owner.createOwner(String(username ?? '').trim(), String(password ?? ''));
     return ownerState();
+  });
+  handle('tunnel:state', async () => tunnelState());
+  handle('tunnel:start', async () => { await startTunnel(); return tunnelState(); });
+  handle('tunnel:stop', async () => { await tunnel.stop(); return tunnelState(); });
+  handle('tunnel:setToken', async (token: string) => {
+    const tk = String(token ?? '').trim();
+    if (!tk) { await fs.rm(tokenPath(), { force: true }); return true; }
+    if (!/^[A-Za-z0-9_\-=.]{40,}$/.test(tk)) throw Object.assign(new Error('this does not look like a tunnel token'), { code: 'tunnel_token' });
+    if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage is unavailable; refusing to store the tunnel token in plain text');
+    await fs.writeFile(tokenPath(), safeStorage.encryptString(tk));
+    return true;
+  });
+  handle('conn:invite', async () => inviteCode());
+  handle('conn:applyInvite', async (code: string) => {
+    const inv = decodeInvite(String(code ?? ''));
+    settings.apiBase = inv.api;
+    if (inv.game) settings.gameAddress = inv.game;
+    settings.expectedKeyIds = { ...(settings.expectedKeyIds ?? {}), [inv.api]: inv.keyId };
+    const pk = { ...(settings.pinnedKeys ?? {}) }; delete pk[inv.api]; settings.pinnedKeys = pk;
+    await settingsStore.save(settings);
+    await ensurePinned();
+    return settings;
+  });
+  /** Is the build reachable through its public address, and does the game answer at its public address? */
+  handle('conn:check', async () => {
+    const publicApi = owner ? settings.ownerPublicUrl : apiBase();
+    const out: { build: { ok: boolean; detail: string }; game: { ok: boolean; detail: string; players?: number; max?: number } } = { build: { ok: false, detail: 'not set' }, game: { ok: false, detail: 'not set' } };
+    if (publicApi && /^https?:\/\//.test(publicApi) && !isLoopback(publicApi)) {
+      try {
+        const k = await fetchJson<{ keyId: string }>(`${publicApi.replace(/\/$/, '')}/api/public/key`, { retries: 0, timeoutMs: 10000 });
+        const want = owner?.keyId ?? settings.expectedKeyIds?.[publicApi] ?? null;
+        out.build = { ok: !want || k.keyId === want, detail: want && k.keyId !== want ? `key ${k.keyId} ≠ ${want}` : `key ${k.keyId}` };
+      } catch (e) { out.build = { ok: false, detail: (e as Error).message }; }
+    }
+    if (settings.gameAddress) {
+      const [host, port] = settings.gameAddress.split(':');
+      const p = await slpPing(host!, Number(port || 25565), 6000);
+      out.game = p.online ? { ok: true, detail: p.version ?? '', players: p.players, max: p.maxPlayers } : { ok: false, detail: 'no answer' };
+    }
+    return out;
   });
   handle('owner:openPanel', async () => {
     if (!owner) throw new Error('owner mode is off');
@@ -442,6 +515,7 @@ function registerIpc() {
   handle('shell:openUrl', async (url: string) => {
     const u = new URL(url);
     const allowed = ['microsoft.com', 'live.com', 'minecraft.net', ...(backendConfigured() ? [new URL(apiBase()).hostname] : []), 'mojang.com', 'learn.microsoft.com', 'portal.azure.com', 'entra.microsoft.com'];
+    allowed.push('playit.gg', 'cloudflare.com', 'github.com');
     if (u.protocol !== 'https:' || !allowed.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) throw new Error('blocked url');
     await shell.openExternal(u.toString());
     return true;
@@ -495,7 +569,10 @@ app.whenReady().then(async () => {
   settingsStore = new SettingsStore(join(app.getPath('userData'), 'settings.json'), defaultSettings(app.getPath('appData'), Math.round(os.totalmem() / 1048576)));
   settings = await settingsStore.load();
   registerIpc();
-  if (settings.ownerMode) await startOwner().catch((e) => log(`owner mode failed to start: ${(e as Error).stack ?? e}`));
+  if (settings.ownerMode) {
+    await startOwner().catch((e) => log(`owner mode failed to start: ${(e as Error).stack ?? e}`));
+    if (owner && settings.tunnelAuto) void startTunnel().catch((e) => log(`tunnel: ${(e as Error).message}`));
+  }
   accounts = new AccountService({ apiBase: () => (backendConfigured() ? apiBase() : ''), allowInsecureLocal: insecureLocal, userData: app.getPath('userData'), handle, send, log });
   accounts.register();
   await accounts.restore();
@@ -505,6 +582,7 @@ app.whenReady().then(async () => {
 app.on('window-all-closed', () => { if (!gameRunning) app.quit(); });
 // Stop "My server" properly on exit so the world is saved.
 let stoppingServer = false;
+app.on('will-quit', () => { void tunnel.stop(); });
 app.on('before-quit', (e) => {
   if (!localServer || stoppingServer || !['running', 'starting'].includes(localServer.state)) return;
   e.preventDefault();

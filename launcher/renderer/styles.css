@@ -406,3 +406,10 @@ input:focus, select:focus { border-color: var(--violet); outline: none; }
 .owner-card { display: grid; gap: 12px; }
 .owner-create { display: grid; gap: 10px; max-width: 460px; }
 .owner-create input { padding: 9px 12px; background: var(--ink-0); color: var(--text); border: 1px solid var(--iron); font: inherit; }
+.access { display: grid; gap: 14px; margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.access h3 { margin: 0; font: 600 20px/1.2 var(--display); color: var(--gold-hi); letter-spacing: .03em; }
+.access__step { display: grid; gap: 8px; padding: 12px 14px; background: var(--ink-1); border: 1px solid var(--iron-lo); }
+.access__step input[type=text], .access__step input[type=url], .access__step input[type=password], .pathrow input[type=text] { padding: 9px 12px; background: var(--ink-0); color: var(--text); border: 1px solid var(--iron); font: inherit; min-width: 0; flex: 1; }
+.checks { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 13px; }
+.checks .is-ok { color: var(--ok); } .checks .is-bad { color: var(--bad); }
+#inviteCode { word-break: break-all; }

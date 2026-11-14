@@ -38,6 +38,12 @@ export interface LauncherSettings {
   gameAddress: string;
   /** Manifest signing key pinned on first contact with each build server (apiBase -> public PEM). */
   pinnedKeys: Record<string, string>;
+  /** Key id from an invite code per build server: the first key the server shows must match it. */
+  expectedKeyIds: Record<string, string>;
+  /** Cloudflare Tunnel: quick (random address, no account) or token (named tunnel, own domain). */
+  tunnelMode: 'quick' | 'token';
+  /** Start the tunnel together with owner mode. */
+  tunnelAuto: boolean;
 }
 
 export function defaultSettings(baseDir: string, ramMb: number): LauncherSettings {
@@ -48,7 +54,7 @@ export function defaultSettings(baseDir: string, ramMb: number): LauncherSetting
     preset: null, presetIsManual: false, language: 'ru', channel: 'stable', closeOnLaunch: false,
     testMode: false, testNick: '', serverPort: 25565, serverMemoryMb: ramMb >= 16000 ? 6144 : 4096, eulaAccepted: false,
     azureClientId: '', apiBase: '', showSnapshots: false,
-    ownerMode: false, ownerPort: 8080, ownerPublicUrl: '', gameAddress: '', pinnedKeys: {},
+    ownerMode: false, ownerPort: 8080, ownerPublicUrl: '', gameAddress: '', pinnedKeys: {}, expectedKeyIds: {}, tunnelMode: 'quick', tunnelAuto: true,
   };
 }
 
@@ -67,6 +73,7 @@ export function validateSettings(s: Partial<LauncherSettings>, totalRamMb: numbe
   if (s.ownerPort !== undefined && (!Number.isInteger(s.ownerPort) || s.ownerPort < 1024 || s.ownerPort > 65535)) errs.push('ownerPort');
   if (s.ownerPublicUrl !== undefined && s.ownerPublicUrl !== '' && !/^https:\/\/[^\s/]+\/?$/.test(s.ownerPublicUrl)) errs.push('ownerPublicUrl');
   if (s.gameAddress !== undefined && s.gameAddress !== '' && !/^[A-Za-z0-9.-]+(:\d{2,5})?$/.test(s.gameAddress)) errs.push('gameAddress');
+  if (s.tunnelMode !== undefined && !['quick', 'token'].includes(s.tunnelMode)) errs.push('tunnelMode');
   if (s.apiBase !== undefined && s.apiBase !== '' && !/^https?:\/\/[^\s/]+(\/[^\s]*)?$/.test(s.apiBase)) errs.push('apiBase');
   return errs;
 }

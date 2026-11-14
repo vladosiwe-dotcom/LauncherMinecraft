@@ -157,6 +157,20 @@ export class Builds {
     await fs.rename(`${this.manifestPath(channel)}.tmp`, this.manifestPath(channel));
   }
 
+  /**
+   * Re-sign the published manifests with the current public address and game server address (same build, same
+   * files and hashes, so launchers download nothing). Needed when the build server moves, e.g. a new tunnel URL.
+   */
+  async refreshPublished(): Promise<number> {
+    const { builds, published } = await this.db.builds.read();
+    let n = 0;
+    for (const channel of ['stable', 'testing'] as const) {
+      const b = published[channel] ? builds.find((x) => x.id === published[channel]) : undefined;
+      if (b) { await this.writeSigned(b, channel); n++; }
+    }
+    return n;
+  }
+
   async signedManifest(channel: 'stable' | 'testing'): Promise<SignedManifest | null> {
     try { return JSON.parse(await fs.readFile(this.manifestPath(channel), 'utf8')); } catch { return null; }
   }

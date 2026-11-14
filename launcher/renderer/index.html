@@ -130,6 +130,46 @@
             <button type="button" class="btn btn--ghost" id="ownerRestart" data-i18n="own.restart"></button>
           </div>
           <p class="hint mono" id="ownerInfo"></p>
+          <div class="access">
+            <h3 data-i18n="acc2.title"></h3>
+            <div class="access__step">
+              <b data-i18n="acc2.build"></b>
+              <p class="hint" data-i18n="acc2.build.d"></p>
+              <div class="segmented">
+                <label><input type="radio" name="tunnelMode" value="quick" id="tunnelQuick"><span data-i18n="acc2.quick"></span></label>
+                <label><input type="radio" name="tunnelMode" value="token" id="tunnelToken"><span data-i18n="acc2.token"></span></label>
+              </div>
+              <p class="hint" id="tunnelModeHint"></p>
+              <div id="tokenFields" hidden>
+                <div class="field"><label for="tunnelTokenInput" data-i18n="acc2.tokenInput"></label><input type="password" id="tunnelTokenInput" autocomplete="off" spellcheck="false"></div>
+                <div class="field"><label for="ownerPublicUrl" data-i18n="acc2.publicUrl"></label><input type="url" id="ownerPublicUrl" placeholder="https://build.example.com" spellcheck="false"></div>
+                <p class="hint"><button type="button" class="link" data-open="https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/get-started/create-remote-tunnel/" data-i18n="acc2.tokenHow"></button></p>
+              </div>
+              <div class="srv-actions">
+                <button type="button" class="btn" id="tunnelStart" data-i18n="acc2.start"></button>
+                <button type="button" class="btn btn--ghost" id="tunnelStop" data-i18n="acc2.stop"></button>
+                <span class="pill" id="tunnelPill"></span>
+              </div>
+              <p class="hint mono" id="tunnelUrl"></p>
+              <label class="switch"><input type="checkbox" id="tunnelAuto"><span></span><b data-i18n="acc2.auto"></b></label>
+            </div>
+            <div class="access__step">
+              <b data-i18n="acc2.game"></b>
+              <p class="hint" data-i18n="acc2.game.d"></p>
+              <p class="hint"><button type="button" class="link" data-open="https://playit.gg/download" data-i18n="acc2.playit"></button></p>
+              <div class="field"><label for="gameAddress" data-i18n="acc2.gameAddress"></label><input type="text" id="gameAddress" placeholder="example.joinmc.link" spellcheck="false"></div>
+            </div>
+            <div class="access__step">
+              <b data-i18n="acc2.check"></b>
+              <div class="srv-actions"><button type="button" class="btn" id="connCheck" data-i18n="acc2.checkBtn"></button></div>
+              <ul class="checks" id="connChecks"></ul>
+            </div>
+            <div class="access__step">
+              <b data-i18n="acc2.invite"></b>
+              <p class="hint" data-i18n="acc2.invite.d"></p>
+              <div class="pathrow"><code id="inviteCode">—</code><button type="button" class="btn" id="inviteCopy" data-i18n="acc2.copy"></button></div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="srv-grid">
@@ -239,6 +279,11 @@
           <p class="hint" id="apiState"></p>
           <button type="button" class="btn btn--ghost" id="resetKey" data-i18n="conn.resetKey"></button>
           <p class="hint" data-i18n="conn.resetKey.d"></p>
+        </div>
+        <div class="field">
+          <label for="inviteInput" data-i18n="conn.invite"></label>
+          <div class="pathrow"><input type="text" id="inviteInput" placeholder="RIFT-…" spellcheck="false" autocomplete="off"><button type="button" class="btn btn--gold" id="inviteApply" data-i18n="conn.invite.apply"></button></div>
+          <p class="hint" data-i18n="conn.invite.d"></p>
         </div>
       </div>
 

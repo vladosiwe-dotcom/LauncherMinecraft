@@ -314,7 +314,7 @@
   function accError(e) {
     const code = String(e.code || '').replace(/^account\./, '');
     if (code === 'account_banned') return t('acc.err.account_banned', { reason: e.message && e.message !== 'account_banned' ? e.message : '—' });
-    return T(`acc.err.${code}`) ?? (e.code === 'network' ? t('err.network') : t('acc.err.generic'));
+    return T(`acc.err.${code}`) ?? (e.code === 'network' ? t('err.network') : e.code === 'secure_storage' ? t('err.secure_storage') : t('acc.err.generic'));
   }
   const T = (k) => ((I18N[state.lang] && I18N[state.lang][k]) ?? I18N.ru[k]);
   function setAuthMode(m) {
@@ -562,7 +562,7 @@
   async function loadOwner() { try { own.st = await call(sir.ownerState()); } catch { own.st = null; } renderOwner(); }
   $('#ownerMode').addEventListener('change', async (e) => {
     e.target.disabled = true;
-    try { own.st = await call(e.target.checked ? sir.ownerEnable() : sir.ownerDisable()); await refreshFlags(); loadServer(); loadNews(); loadUpdate(); }
+    try { own.st = await call(e.target.checked ? sir.ownerEnable() : sir.ownerDisable()); await refreshFlags(); loadServer(); loadNews(); loadUpdate(); loadTunnel(); }
     catch (err) { showError(err); await loadOwner(); }
     finally { e.target.disabled = false; renderOwner(); }
   });
@@ -574,6 +574,55 @@
   });
   $('#ownerPanel').addEventListener('click', () => call(sir.ownerOpenPanel()).catch(showError));
   $('#ownerRestart').addEventListener('click', async () => { try { own.st = await call(sir.ownerRestart()); } catch (e) { showError(e); } renderOwner(); });
+  // ---------- access for friends: tunnel, game address, check, invite ----------
+  const tun = { st: null, invite: null };
+  async function loadTunnel() {
+    try { tun.st = await call(sir.tunnelState()); tun.invite = await call(sir.invite()); } catch { /* owner mode off */ }
+    renderTunnel();
+  }
+  function renderTunnel() {
+    const st = tun.st, s = state.settings; if (!st || !s) return;
+    $('#tunnelQuick').checked = st.mode === 'quick'; $('#tunnelToken').checked = st.mode === 'token';
+    $('#tunnelModeHint').textContent = t(st.mode === 'quick' ? 'acc2.quick.d' : 'acc2.token.d');
+    $('#tokenFields').hidden = st.mode !== 'token';
+    const p = $('#tunnelPill'); p.className = `pill ${st.state === 'running' ? 'is-ok' : st.state === 'error' ? 'is-bad' : ['starting', 'downloading'].includes(st.state) ? 'is-warn' : ''}`; p.textContent = t(`tun.${st.state}`);
+    $('#tunnelStart').disabled = ['running', 'starting', 'downloading'].includes(st.state);
+    $('#tunnelStop').disabled = !['running', 'starting'].includes(st.state);
+    $('#tunnelUrl').textContent = st.url ?? '';
+    $('#tunnelAuto').checked = !!st.auto;
+    if (document.activeElement !== $('#ownerPublicUrl')) $('#ownerPublicUrl').value = s.ownerPublicUrl ?? '';
+    if (document.activeElement !== $('#gameAddress')) $('#gameAddress').value = s.gameAddress ?? '';
+    $('#inviteCode').textContent = tun.invite ?? t('acc2.noInvite');
+    $('#inviteCopy').disabled = !tun.invite;
+  }
+  $$('input[name="tunnelMode"]').forEach((r) => r.addEventListener('change', async (e) => { await save({ tunnelMode: e.target.value }); loadTunnel(); }));
+  $('#tunnelAuto').addEventListener('change', (e) => save({ tunnelAuto: e.target.checked }).then(loadTunnel));
+  $('#tunnelTokenInput').addEventListener('change', async (e) => { try { await call(sir.tunnelSetToken(e.target.value)); e.target.value = ''; e.target.placeholder = '••••••••'; } catch (err) { showError(err); } });
+  $('#ownerPublicUrl').addEventListener('change', (e) => save({ ownerPublicUrl: e.target.value.trim().replace(/\/$/, '') }).then(() => call(sir.ownerRestart())).then(loadTunnel).catch(showError));
+  $('#gameAddress').addEventListener('change', (e) => save({ gameAddress: e.target.value.trim() }).then(() => own.st?.running && call(sir.ownerRestart())).then(loadTunnel).catch(showError));
+  $('#tunnelStart').addEventListener('click', async () => { try { tun.st = await call(sir.tunnelStart()); } catch (e) { showError(e); } loadTunnel(); });
+  $('#tunnelStop').addEventListener('click', async () => { try { tun.st = await call(sir.tunnelStop()); } catch (e) { showError(e); } loadTunnel(); });
+  sir.onTunnelState?.(() => loadTunnel());
+  sir.onTunnelUrl?.(async () => { state.settings = (await call(sir.state())).settings; loadTunnel(); });
+  $('#connCheck').addEventListener('click', async (e) => {
+    e.target.disabled = true; $('#connChecks').innerHTML = '';
+    try {
+      const r = await call(sir.connCheck());
+      $('#connChecks').innerHTML = [['acc2.check.build', r.build], ['acc2.check.game', r.game]].map(([k, v]) =>
+        `<li class="${v.ok ? 'is-ok' : 'is-bad'}">${v.ok ? '✓' : '✗'} ${esc(t(k))}: ${esc(v.detail)}${v.players !== undefined ? ` · ${esc(t('srv.players', { n: v.players, max: v.max }))}` : ''}</li>`).join('');
+    } catch (err) { showError(err); }
+    finally { e.target.disabled = false; }
+  });
+  $('#inviteCopy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(tun.invite); $('#inviteCopy').textContent = t('acc2.copied'); setTimeout(() => { $('#inviteCopy').textContent = t('acc2.copy'); }, 1500); }
+    catch { getSelection().selectAllChildren($('#inviteCode')); }
+  });
+  $('#inviteApply').addEventListener('click', async () => {
+    try { state.settings = await call(sir.applyInvite($('#inviteInput').value)); $('#inviteInput').value = ''; $('#apiState').textContent = `✓ ${t('conn.invite.ok')}`; await refreshFlags(); loadServer(); loadNews(); loadUpdate(); loadAccount(); }
+    catch (err) { showError(err); }
+  });
+  $$('.rail__item[data-view="server"]').forEach((b) => b.addEventListener('click', loadTunnel));
+
   $('#resetKey').addEventListener('click', async () => { try { await call(sir.resetKey()); loadUpdate(); } catch (e) { showError(e); } });
   $$('.rail__item[data-view="server"]').forEach((b) => b.addEventListener('click', loadOwner));
 

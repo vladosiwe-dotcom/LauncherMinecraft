@@ -33,6 +33,8 @@ export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDe
   const auth = new Auth(db, config.cookieSecure);
   const library = new Library(config.dataDir, db);
   const builds = new Builds({ db, publicBaseUrl: config.publicBaseUrl, server: { host: config.mcHost, port: config.mcPort }, keys, dataDir: config.dataDir });
+  // published manifests always carry the current addresses (the server may have moved since publishing)
+  void builds.refreshPublished().catch((e) => console.warn(`[rift] could not refresh published manifests: ${e?.message ?? e}`));
   const proc = new ServerProcess(config.serverDir);
   const backups = new Backups(config.serverDir, join(config.dataDir, 'backups'), proc, config.backupKeep);
 
