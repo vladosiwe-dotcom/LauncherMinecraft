@@ -41,6 +41,7 @@ export function validateSettings(s: Partial<LauncherSettings>, totalRamMb: numbe
   if (s.width !== undefined && (s.width < 854 || s.width > 7680)) errs.push('width');
   if (s.height !== undefined && (s.height < 480 || s.height > 4320)) errs.push('height');
   if (s.language !== undefined && !['ru', 'uk', 'en'].includes(s.language)) errs.push('language');
+  if (s.testMode !== undefined && typeof s.testMode !== 'boolean') errs.push('testMode');
   if (s.preset !== undefined && s.preset !== null && !['minimal', 'balanced', 'high', 'ultra'].includes(s.preset)) errs.push('preset');
   if (s.channel !== undefined && !['stable', 'testing'].includes(s.channel)) errs.push('channel');
   if (s.serverPort !== undefined && (!Number.isInteger(s.serverPort) || s.serverPort < 1024 || s.serverPort > 65535)) errs.push('serverPort');
