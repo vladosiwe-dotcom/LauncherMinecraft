@@ -13,10 +13,6 @@ contextBridge.exposeInMainWorld('sir', {
   saveSettings: (patch: unknown) => invoke('settings:save', patch),
   pickDir: () => invoke('settings:pickDir'),
   pickJava: () => invoke('settings:pickJava'),
-  login: () => invoke('auth:login'),
-  cancelLogin: () => invoke('auth:cancel'),
-  logout: () => invoke('auth:logout'),
-  uploadSkin: (variant: 'classic' | 'slim') => invoke('skin:upload', variant),
   serverStatus: () => invoke('server:status'),
   account: () => invoke('account:state'),
   accountRegister: (nick: string, password: string) => invoke('account:register', nick, password),
@@ -47,7 +43,5 @@ contextBridge.exposeInMainWorld('sir', {
   openUrl: (u: string) => invoke('shell:openUrl', u),
   window: (a: 'min' | 'max' | 'close') => ipcRenderer.send('window:control', a),
   onProgress: on('progress'),
-  onAuthCode: on('auth:code'),
-  onSession: on('auth:session'),
   onGameState: on('game:state'),
 });
