@@ -379,7 +379,6 @@
   function renderServer() {
     const s = state.settings; if (!s) return;
     $('#testMode').checked = !!s.testMode;
-    if (document.activeElement !== $('#testNick')) $('#testNick').value = s.testNick || '';
     const tp = $('#testPill'); tp.className = `pill ${s.testMode ? 'is-warn' : ''}`; tp.textContent = t(s.testMode ? 'srv.test.pillOn' : 'srv.test.pillOff');
     const sp = $('#srvPill'); sp.className = `pill ${SRV_PILL[srv.state] ?? ''}`; sp.textContent = t(`srv.state.${srv.state}`);
     $('#srvBuild').textContent = srv.build ? t('srv.build', { b: srv.build }) : t('srv.notInstalled');
@@ -405,11 +404,7 @@
   sir.onServerLine?.((l) => appendLog([l]));
   sir.onServerState?.((st) => { srv.state = st; if (st === 'stopped') loadServerView(); else renderServer(); });
   $('#testMode').addEventListener('change', async (e) => { await save({ testMode: e.target.checked }); renderServer(); renderAuthGate(); });
-  $('#testNick').addEventListener('change', async (e) => {
-    const v = e.target.value.trim();
-    if (v && !/^[A-Za-z0-9_]{3,16}$/.test(v)) { showError(Object.assign(new Error(t('srv.nick.bad')), { code: 'unknown' })); return; }
-    await save({ testNick: v }); renderServer();
-  });
+
   $('#srvEula').addEventListener('change', renderServer);
   $('#srvInstall').addEventListener('click', async () => {
     srv.state = 'installing'; renderServer();
