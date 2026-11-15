@@ -54,28 +54,6 @@ export function passwordProblem(pw: string, nick: string): string | null {
   return null;
 }
 
-/** Undashed Minecraft UUID → dashed form. */
-export function dashUuid(u: string): string {
-  const h = u.replace(/-/g, '').toLowerCase();
-  if (!/^[0-9a-f]{32}$/.test(h)) throw fail(400, 'bad_uuid');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-
-export function publicAccount(a: Account) {
-  return { id: a.id, nick: a.nick, role: a.role, status: a.status, banReason: a.banReason, mustChangePassword: !!a.mustChangePassword, createdAt: a.createdAt, lastLoginAt: a.lastLoginAt, minecraft: a.minecraft ?? null };
-}
-
-/** Mojang session server check used by Minecraft servers: did this player join with this serverId? */
-export type HasJoined = (name: string, serverId: string) => Promise<{ id: string; name: string } | null>;
-export function mojangHasJoined(base = 'https://sessionserver.mojang.com'): HasJoined {
-  return async (name, serverId) => {
-    const r = await fetch(`${base}/session/minecraft/hasJoined?username=${encodeURIComponent(name)}&serverId=${encodeURIComponent(serverId)}`, { signal: AbortSignal.timeout(10000) });
-    if (r.status !== 200) return null;
-    const j = (await r.json()) as { id?: string; name?: string };
-    return j.id && j.name ? { id: j.id, name: j.name } : null;
-  };
-}
-
 export class Accounts {
   readonly loginLimiter = new LoginLimiter(8, 15 * 60 * 1000);
   private readonly registerLimiter = new LoginLimiter(5, 60 * 60 * 1000);
@@ -83,7 +61,7 @@ export class Accounts {
   private readonly ticketLimiter = new LoginLimiter(12, 60 * 1000);
   private readonly dummyHash: Promise<string>;
 
-  constructor(private readonly db: Stores, private readonly hasJoined: HasJoined) {
+  constructor(private readonly db: Stores) {
     this.dummyHash = argonHash('timing-equaliser-not-a-password', ARGON);
   }
 
