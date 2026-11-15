@@ -54,16 +54,12 @@ npm start
 ```json
 {
   "apiBase": "https://rift.example.org",
-  "azureClientId": "<ваш Application (client) ID>",
   "trustedManifestKeys": ["-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----\n"],
   "allowInsecureLocalApi": false
 }
 ```
 
-**Azure App ID для входа Microsoft:**
-1. Azure Portal → App registrations → New registration. Тип аккаунтов: *Personal Microsoft accounts only*.
-2. Authentication → включите *Allow public client flows* (нужно для device code).
-3. Подайте заявку Mojang на доступ к Minecraft API для этого App ID (форма Microsoft «Minecraft Java Edition API access»). Пока заявку не одобрят, шаг `login_with_xbox` будет возвращать ошибку.
+Игровая авторизация использует аккаунты Rift. Azure App ID, Microsoft OAuth и Xbox Live настраивать не нужно. Укажите HTTPS `apiBase` и публичный ключ подписи сборки.
 
 Сборка установщиков:
 

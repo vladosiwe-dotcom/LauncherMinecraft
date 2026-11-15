@@ -22,7 +22,7 @@ export interface LaunchOptions {
   fullscreen?: boolean;
   extraJvmArgs?: string[];
   launcherVersion: string;
-  clientId?: string;
+  gameTicket?: string;
 }
 
 function expand(args: Argument[] | undefined, features: Record<string, boolean>): string[] {
@@ -65,9 +65,9 @@ export function buildCommand(o: LaunchOptions): { args: string[]; classpath: str
     assets_index_name: v.assetIndex?.id ?? v.assets ?? '',
     auth_uuid: o.profile.uuid,
     auth_access_token: o.profile.accessToken,
-    clientid: o.clientId ?? '',
+    clientid: '',
     auth_xuid: o.profile.xuid,
-    user_type: 'msa',
+    user_type: 'legacy',
     version_type: 'release',
     natives_directory: join(o.root, 'natives', v.id),
     launcher_name: 'spell-and-iron-rift',
@@ -98,7 +98,7 @@ export async function launch(o: LaunchOptions, onLog: (line: string) => void): P
   const missing = buildCommand(o).classpath.filter((p) => !existsSync(p));
   if (missing.length) throw new Error(`Missing ${missing.length} libraries (first: ${missing[0]}). Run repair.`);
   const { args } = buildCommand(o);
-  const child = spawn(o.javaExe, args, { cwd: o.gameDir, env: { ...process.env, _JAVA_OPTIONS: '' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(o.javaExe, args, { cwd: o.gameDir, env: { ...process.env, _JAVA_OPTIONS: '', ...(o.gameTicket ? { RIFT_GAME_TICKET: o.gameTicket } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
   const pipe = (s: NodeJS.ReadableStream | null) => s?.on('data', (b: Buffer) => b.toString().split(/\r?\n/).filter(Boolean).forEach(onLog));
   pipe(child.stdout); pipe(child.stderr);
   return child;

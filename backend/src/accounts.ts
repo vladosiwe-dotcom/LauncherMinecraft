@@ -4,14 +4,9 @@ import type { Stores } from './db.js';
 import { LoginLimiter, generatePassword } from './auth.js';
 
 /**
- * Spell and Iron Rift player accounts: the project's own identity on top of the Minecraft licence.
- *
- * A player registers in the launcher with a nickname and password and gets a permanent account UUID,
- * a role (player / moderator / admin) and a session that survives launcher restarts. Playing still needs the
- * official Microsoft sign-in: the account is linked to the player's Minecraft profile through Mojang's
- * session server (join → hasJoined, the same check Minecraft servers use), so nobody can claim someone
- * else's Minecraft UUID or nickname. The game server asks this service whether a verified Minecraft UUID
- * belongs to an active account and which role it has.
+ * Rift is the sole player identity provider. Launcher sessions issue short-lived, one-use game tickets.
+ * The dedicated server consumes each ticket over HTTPS using its private server key before allowing login.
+ * Minecraft's offline UUID is only a transport identity; it is never trusted without the Rift ticket.
  */
 
 export type AccountRole = 'player' | 'moderator' | 'admin';
@@ -34,7 +29,7 @@ export interface Account {
 }
 
 export interface AccountSession { tokenHash: string; accountId: string; createdAt: number; expiresAt: number; lastUsedAt: number; ip: string }
-export interface LinkChallenge { accountId: string; serverId: string; expiresAt: number }
+export interface GameTicket { accountId: string; nick: string; serverId: string; expiresAt: number }
 
 export const NICK_RE = /^[A-Za-z0-9_]{3,16}$/;
 const RESERVED = new Set(['admin', 'administrator', 'moderator', 'mod', 'owner', 'server', 'console', 'system', 'support', 'rift', 'staff', 'root']);
@@ -59,35 +54,14 @@ export function passwordProblem(pw: string, nick: string): string | null {
   return null;
 }
 
-/** Undashed Minecraft UUID → dashed form. */
-export function dashUuid(u: string): string {
-  const h = u.replace(/-/g, '').toLowerCase();
-  if (!/^[0-9a-f]{32}$/.test(h)) throw fail(400, 'bad_uuid');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-
-export function publicAccount(a: Account) {
-  return { id: a.id, nick: a.nick, role: a.role, status: a.status, banReason: a.banReason, mustChangePassword: !!a.mustChangePassword, createdAt: a.createdAt, lastLoginAt: a.lastLoginAt, minecraft: a.minecraft ?? null };
-}
-
-/** Mojang session server check used by Minecraft servers: did this player join with this serverId? */
-export type HasJoined = (name: string, serverId: string) => Promise<{ id: string; name: string } | null>;
-export function mojangHasJoined(base = 'https://sessionserver.mojang.com'): HasJoined {
-  return async (name, serverId) => {
-    const r = await fetch(`${base}/session/minecraft/hasJoined?username=${encodeURIComponent(name)}&serverId=${encodeURIComponent(serverId)}`, { signal: AbortSignal.timeout(10000) });
-    if (r.status !== 200) return null;
-    const j = (await r.json()) as { id?: string; name?: string };
-    return j.id && j.name ? { id: j.id, name: j.name } : null;
-  };
-}
-
 export class Accounts {
   readonly loginLimiter = new LoginLimiter(8, 15 * 60 * 1000);
   private readonly registerLimiter = new LoginLimiter(5, 60 * 60 * 1000);
-  private challenges = new Map<string, LinkChallenge>();
+  private gameTickets = new Map<string, GameTicket>();
+  private readonly ticketLimiter = new LoginLimiter(12, 60 * 1000);
   private readonly dummyHash: Promise<string>;
 
-  constructor(private readonly db: Stores, private readonly hasJoined: HasJoined) {
+  constructor(private readonly db: Stores) {
     this.dummyHash = argonHash('timing-equaliser-not-a-password', ARGON);
   }
 
@@ -165,41 +139,37 @@ export class Accounts {
     await this.revokeAll(a.id, token); // other devices sign in again
   }
 
-  // ------------------------------------------------------------ linking to the Minecraft profile
+  // ------------------------------------------------------------ Rift game sessions
 
-  /** A one-time serverId the launcher "joins" on Mojang's session server with the player's Minecraft session. */
-  linkChallenge(a: Account): string {
-    for (const [k, c] of this.challenges) if (c.expiresAt < Date.now()) this.challenges.delete(k);
-    const serverId = randomBytes(20).toString('hex');
-    this.challenges.set(a.id, { accountId: a.id, serverId, expiresAt: Date.now() + 2 * 60 * 1000 });
-    return serverId;
+  /** Issue a short-lived, one-use ticket for one configured game server. */
+  async issueGameTicket(sessionToken: string | undefined, serverId: string, ip: string) {
+    const account = await this.session(sessionToken);
+    if (!account) throw fail(401, 'session_expired');
+    if (account.mustChangePassword) throw fail(403, 'password_change_required');
+    if (!/^[a-z0-9_-]{1,48}$/i.test(serverId)) throw fail(400, 'bad_server_id');
+    const key = `account:${account.id}`;
+    if (this.ticketLimiter.blocked(key)) throw fail(429, 'game_ticket_rate_limited');
+    this.ticketLimiter.fail(key);
+    const token = randomBytes(32).toString('base64url');
+    const now = Date.now();
+    for (const [hash, ticket] of this.gameTickets) if (ticket.expiresAt <= now) this.gameTickets.delete(hash);
+    this.gameTickets.set(sha(token), { accountId: account.id, nick: account.nick, serverId, expiresAt: now + 60_000 });
+    return { token, serverId, expiresAt: now + 60_000 };
   }
 
-  async link(a: Account, minecraftName: string) {
-    const c = this.challenges.get(a.id);
-    this.challenges.delete(a.id);
-    if (!c || c.expiresAt < Date.now()) throw fail(400, 'link_expired');
-    const profile = await this.hasJoined(String(minecraftName ?? ''), c.serverId);
-    if (!profile) throw fail(403, 'link_not_verified');
-    const uuid = dashUuid(profile.id);
-    await this.db.accounts.update((d) => {
-      const other = d.accounts.find((x) => x.minecraft?.uuid === uuid && x.id !== a.id);
-      if (other) throw fail(409, 'minecraft_linked_elsewhere');
-      const x = d.accounts.find((y) => y.id === a.id);
-      if (x) x.minecraft = { uuid, name: profile.name, linkedAt: new Date().toISOString() };
-    });
-    return { uuid, name: profile.name };
-  }
-
-  // ------------------------------------------------------------ game server
-
-  /** What the game server needs to know about a Mojang-verified player UUID. */
-  async lookupMinecraft(mcUuid: string) {
-    const uuid = dashUuid(mcUuid);
-    const a = (await this.db.accounts.read()).accounts.find((x) => x.minecraft?.uuid === uuid);
-    if (!a) return { allowed: false, reason: 'not_registered' as const };
-    if (a.status === 'banned') return { allowed: false, reason: 'banned' as const, banReason: a.banReason ?? '', nick: a.nick, accountId: a.id };
-    return { allowed: true, nick: a.nick, role: a.role, accountId: a.id };
+  /** Consume exactly once. The server key authenticates the server; the ticket authenticates the player. */
+  async consumeGameTicket(token: string, serverId: string, requestedNick: string) {
+    if (typeof token !== 'string' || token.length < 32 || token.length > 256) return { allowed: false, reason: 'invalid_ticket' as const };
+    const hash = sha(token);
+    const ticket = this.gameTickets.get(hash);
+    this.gameTickets.delete(hash); // burn before checking, including failed attempts
+    if (!ticket || ticket.expiresAt <= Date.now()) return { allowed: false, reason: 'ticket_expired' as const };
+    if (ticket.serverId !== serverId || ticket.nick.toLowerCase() !== String(requestedNick).toLowerCase()) {
+      return { allowed: false, reason: 'ticket_mismatch' as const };
+    }
+    const account = (await this.db.accounts.read()).accounts.find((a) => a.id === ticket.accountId);
+    if (!account || account.status !== 'active') return { allowed: false, reason: 'banned' as const, banReason: account?.banReason ?? '' };
+    return { allowed: true, accountId: account.id, nick: account.nick, role: account.role };
   }
 
   // ------------------------------------------------------------ administration
@@ -244,6 +214,24 @@ export class Accounts {
     });
     await this.revokeAll(id);
   }
+}
+
+/** Public account projection: never expose password hashes, session data or legacy Minecraft links. */
+export function publicAccount(account: Account) {
+  return {
+    id: account.id,
+    nick: account.nick,
+    role: account.role,
+    status: account.status,
+    mustChangePassword: !!account.mustChangePassword,
+    createdAt: account.createdAt,
+    lastLoginAt: account.lastLoginAt,
+    ...(account.status === 'banned' ? {
+      banReason: account.banReason ?? '',
+      bannedAt: account.bannedAt,
+      bannedBy: account.bannedBy,
+    } : {}),
+  };
 }
 
 /** Constant-time check of the game server's API key. */

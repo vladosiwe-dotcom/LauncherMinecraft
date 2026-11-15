@@ -6,13 +6,13 @@ import { dirname, join } from 'node:path';
 import { isSafeManagedPath, serverFiles as sharedServerFiles, type BuildManifest, type ManifestFile } from '@sir/shared';
 import { applyProperties } from './game.js';
 import { downloadFile, fileExists, runPool } from './http.js';
-import { installNeoForgeServer } from './neoforge.js';
+import { installNeoForgeServer, neoforgeServerArgsFile } from './neoforge.js';
 
 /**
  * "My server": a NeoForge server on this PC with the same build as the players, run from the launcher.
  * One button installs it (NeoForge server + the build's server-side files), Start/Stop run it, the console
  * shows its log and sends commands. In test mode the server runs without Microsoft checks (online-mode=false)
- * so testers on this PC or local network can join with a nickname.
+ * while the Rift server guard still requires a valid one-use Rift ticket.
  */
 export type ServerState = 'not_installed' | 'stopped' | 'installing' | 'starting' | 'running' | 'stopping';
 
@@ -125,17 +125,32 @@ export class LocalServer extends EventEmitter {
     const propsPath = join(this.dir, 'server.properties');
     await fs.writeFile(propsPath, serverProperties(await fs.readFile(propsPath, 'utf8').catch(() => ''), o));
     await fs.writeFile(join(this.dir, 'user_jvm_args.txt'), `-Xmx${o.memoryMb}M\n`);
-    const argsFile = `libraries/net/neoforged/neoforge/${stamp.neoforge}/${process.platform === 'win32' ? 'win' : 'unix'}_args.txt`;
+    const argsFile = neoforgeServerArgsFile(stamp.neoforge);
+    if (!(await fileExists(join(this.dir, argsFile)))) throw new Error(`NeoForge server arguments are missing: ${argsFile}. Reinstall the local server.`);
     this.setState('starting');
-    this.proc = spawn(javaExe.replace(/javaw\.exe$/, 'java.exe'), ['@user_jvm_args.txt', `@${argsFile}`, 'nogui'], { cwd: this.dir, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    const child = spawn(javaExe.replace(/javaw\.exe$/i, 'java.exe'), ['@user_jvm_args.txt', `@${argsFile}`, 'nogui'], { cwd: this.dir, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    this.proc = child;
     const feed = (buf: Buffer) => buf.toString('utf8').split(/\r?\n/).filter(Boolean).forEach((l) => this.line(l));
-    this.proc.stdout?.on('data', feed);
-    this.proc.stderr?.on('data', feed);
-    this.proc.on('exit', (code) => {
-      this.proc = null;
+    child.stdout?.on('data', feed);
+    child.stderr?.on('data', feed);
+    let spawned = false;
+    const spawnPromise = new Promise<void>((resolve, reject) => {
+      child.once('spawn', () => { spawned = true; resolve(); });
+      child.on('error', (error) => {
+        if (this.proc === child) {
+          this.proc = null;
+          this.line(`[launcher] server process error: ${error.message}`);
+          this.setState('stopped');
+        }
+        if (!spawned) reject(error);
+      });
+    });
+    child.on('exit', (code) => {
+      if (this.proc === child) this.proc = null;
       this.line(`[launcher] server exited (${code ?? 'signal'})`);
       this.setState('stopped');
     });
+    await spawnPromise;
   }
 
   command(text: string) {

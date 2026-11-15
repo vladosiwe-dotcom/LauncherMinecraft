@@ -2,8 +2,6 @@ package org.spellandironrift.guard;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
-import com.google.gson.reflect.TypeToken;
-import com.mojang.authlib.GameProfile;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -24,184 +22,196 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.server.players.ServerOpListEntry;
 import net.neoforged.api.distmarker.Dist;
-import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
-import net.neoforged.fml.loading.FMLPaths;
+import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-/**
- * Checks every joining player against Spell and Iron Rift accounts.
- *
- * <p>The player's UUID is trustworthy only on an online-mode server, where Mojang has verified it during the
- * login handshake; the guard therefore refuses to run with online-mode=false. For a verified UUID the account
- * server answers: allowed (nickname, role) or not (not registered / banned with a reason). Allowed players get
- * the role's operator level and their project nickname in chat and the player list; others are disconnected
- * with an explanation. Online players are re-checked periodically, so a ban or role change applies at once.
- */
+/** Rift-only authentication for offline-mode Minecraft servers. */
 @EventBusSubscriber(modid = GuardMod.MODID, value = Dist.DEDICATED_SERVER)
 public final class Guard {
     private record Verdict(boolean allowed, String nick, String role, String reason, String banReason) {}
-
-    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
+    private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
     private static final Gson GSON = new Gson();
+    private static final Map<UUID, Long> PENDING = new ConcurrentHashMap<>();
     private static final Map<UUID, Verdict> CURRENT = new ConcurrentHashMap<>();
-    private static Map<String, Verdict> cache = new ConcurrentHashMap<>();
-    private static Set<String> managedOps = new HashSet<>();
+    private static final Set<String> managedOps = new HashSet<>();
     private static boolean active;
     private static int ticks;
 
     private Guard() {}
 
-    private static Path cacheFile() { return FMLPaths.CONFIGDIR.get().resolve("spellironrift-guard-cache.json"); }
-    private static Path opsFile() { return FMLPaths.CONFIGDIR.get().resolve("spellironrift-guard-ops.json"); }
+    private static Path opsFile() { return GuardConfig.file().resolveSibling("spellironrift-guard-ops.json"); }
+
+    public static void registerPayloads(RegisterPayloadHandlersEvent event) {
+        event.registrar("1").playToServer(AuthTicketPayload.TYPE, AuthTicketPayload.STREAM_CODEC, Guard::handleTicket);
+    }
 
     @SubscribeEvent
     public static void onStarted(ServerStartedEvent event) {
-        MinecraftServer server = event.getServer();
-        if (!GuardConfig.enabled()) {
-            GuardMod.LOG.warn("Spell and Iron Rift Guard is off: set apiBase and serverKey in {}", GuardConfig.file());
-            return;
-        }
-        if (!server.usesAuthentication()) {
-            GuardMod.LOG.error("Spell and Iron Rift Guard needs online-mode=true: without Mojang's check a player UUID can be faked. The guard stays off.");
-            return;
-        }
         try {
-            if (Files.isRegularFile(cacheFile())) cache = new ConcurrentHashMap<>(GSON.fromJson(Files.readString(cacheFile()), new TypeToken<Map<String, Verdict>>() {}.getType()));
-            if (Files.isRegularFile(opsFile())) managedOps = new HashSet<>(GSON.fromJson(Files.readString(opsFile()), new TypeToken<Set<String>>() {}.getType()));
+            if (Files.isRegularFile(opsFile())) {
+                Set<String> loaded = GSON.fromJson(Files.readString(opsFile()), Set.class);
+                if (loaded != null) managedOps.addAll(loaded);
+            }
         } catch (Exception e) {
-            GuardMod.LOG.warn("Guard cache unreadable, starting empty: {}", e.toString());
+            GuardMod.LOG.warn("Could not load managed operator list: {}", e.toString());
         }
         active = true;
-        GuardMod.LOG.info("Spell and Iron Rift Guard is on ({})", GuardConfig.get().apiBase);
+        if (!GuardConfig.enabled()) {
+            GuardMod.LOG.error("Rift Guard is FAIL-CLOSED: configure apiBase, serverKey and serverId in {}", GuardConfig.file());
+        } else {
+            GuardMod.LOG.info("Rift Guard enabled; serverId={}", GuardConfig.get().serverId);
+        }
     }
 
     @SubscribeEvent
     public static void onLogin(PlayerEvent.PlayerLoggedInEvent event) {
-        if (active && event.getEntity() instanceof ServerPlayer player) check(player);
+        if (!active || !(event.getEntity() instanceof ServerPlayer player)) return;
+        PENDING.put(player.getUUID(), System.currentTimeMillis());
+        player.setInvulnerable(true);
+        if (!GuardConfig.enabled()) {
+            deny(player, "Rift authentication is not configured on this server.");
+            return;
+        }
+        GuardMod.LOG.info("Waiting for Rift ticket from {}", player.getGameProfile().getName());
     }
 
     @SubscribeEvent
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent event) {
+        PENDING.remove(event.getEntity().getUUID());
         CURRENT.remove(event.getEntity().getUUID());
+    }
+
+    private static void handleTicket(AuthTicketPayload payload, IPayloadContext context) {
+        if (!(context.player() instanceof ServerPlayer player)) return;
+        UUID id = player.getUUID();
+        if (!PENDING.containsKey(id)) {
+            deny(player, "Unexpected or repeated Rift authentication packet.");
+            return;
+        }
+        String ticket = payload.ticket();
+        if (ticket == null || ticket.length() < 32 || ticket.length() > 256) {
+            deny(player, "Invalid Rift game ticket.");
+            return;
+        }
+        PENDING.remove(id);
+        consumeTicket(player, ticket);
+    }
+
+    private static void consumeTicket(ServerPlayer player, String ticket) {
+        GuardConfig.Values cfg = GuardConfig.get();
+        JsonObject body = new JsonObject();
+        body.addProperty("ticket", ticket);
+        body.addProperty("serverId", cfg.serverId);
+        body.addProperty("nick", player.getGameProfile().getName());
+        HttpRequest request;
+        try {
+            request = HttpRequest.newBuilder(URI.create(cfg.apiBase.replaceAll("/$", "") + "/api/server/auth/consume"))
+                    .timeout(Duration.ofSeconds(10))
+                    .header("Content-Type", "application/json")
+                    .header("x-rift-server-key", cfg.serverKey)
+                    .POST(HttpRequest.BodyPublishers.ofString(GSON.toJson(body), StandardCharsets.UTF_8))
+                    .build();
+        } catch (Exception e) {
+            deny(player, "Rift authentication endpoint is misconfigured.");
+            return;
+        }
+        MinecraftServer server = player.server;
+        HTTP.sendAsync(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8))
+                .thenApply(response -> {
+                    if (response.statusCode() != 200) throw new IllegalStateException("Rift backend HTTP " + response.statusCode());
+                    return GSON.fromJson(response.body(), JsonObject.class);
+                })
+                .whenComplete((json, error) -> server.execute(() -> {
+                    if (player.hasDisconnected()) return;
+                    if (error != null || json == null || !json.has("allowed") || !json.get("allowed").getAsBoolean()) {
+                        String reason = "Authentication rejected";
+                        if (json != null && json.has("reason")) reason = json.get("reason").getAsString();
+                        deny(player, error == null ? "Rift login rejected: " + reason : "Rift account service unavailable. Try again.");
+                        GuardMod.LOG.warn("Rift authentication failed for {}: {}", player.getGameProfile().getName(), error == null ? reason : error.toString());
+                        return;
+                    }
+                    String nick = json.has("nick") ? json.get("nick").getAsString() : player.getGameProfile().getName();
+                    String role = json.has("role") ? json.get("role").getAsString() : "player";
+                    CURRENT.put(player.getUUID(), new Verdict(true, nick, role, null, null));
+                    player.setInvulnerable(false);
+                    applyRole(server, player, role);
+                    player.refreshDisplayName();
+                    player.refreshTabListName();
+                    GuardMod.LOG.info("Rift authenticated {} as {} ({})", player.getGameProfile().getName(), nick, role);
+                }));
     }
 
     @SubscribeEvent
     public static void onTick(ServerTickEvent.Post event) {
         if (!active) return;
-        if (++ticks < Math.max(10, GuardConfig.get().recheckSeconds) * 20) return;
-        ticks = 0;
-        for (ServerPlayer p : event.getServer().getPlayerList().getPlayers()) check(p);
+        long now = System.currentTimeMillis();
+        for (ServerPlayer player : event.getServer().getPlayerList().getPlayers()) {
+            Long since = PENDING.get(player.getUUID());
+            if (since != null && now - since > 10_000) {
+                PENDING.remove(player.getUUID());
+                deny(player, "Rift authentication timed out. Start the game through the Rift launcher.");
+            }
+        }
     }
 
-    /** Project nickname in chat, above the head and in the player list. */
     @SubscribeEvent
     public static void onName(PlayerEvent.NameFormat event) {
-        Verdict v = CURRENT.get(event.getEntity().getUUID());
-        if (v != null && v.allowed() && v.nick() != null) event.setDisplayname(Component.literal(v.nick()));
+        Verdict verdict = CURRENT.get(event.getEntity().getUUID());
+        if (verdict != null && verdict.allowed()) event.setDisplayname(Component.literal(verdict.nick()));
     }
 
     @SubscribeEvent
     public static void onTabName(PlayerEvent.TabListNameFormat event) {
-        Verdict v = CURRENT.get(event.getEntity().getUUID());
-        if (v != null && v.allowed() && v.nick() != null) event.setDisplayName(Component.literal(v.nick()));
+        Verdict verdict = CURRENT.get(event.getEntity().getUUID());
+        if (verdict != null && verdict.allowed()) event.setDisplayName(Component.literal(verdict.nick()));
     }
 
-    private static void check(ServerPlayer player) {
-        UUID id = player.getUUID();
-        MinecraftServer server = player.server;
-        lookup(id).whenComplete((verdict, error) -> server.execute(() -> {
-            if (player.hasDisconnected()) return;
-            Verdict v = verdict;
-            if (v == null) { // account server unreachable
-                Verdict cached = cache.get(id.toString());
-                v = GuardConfig.get().useCacheWhenOffline && cached != null ? cached
-                        : new Verdict(false, null, null, "unreachable", null);
-            } else {
-                cache.put(id.toString(), v);
-                save(cacheFile(), cache);
-            }
-            apply(server, player, v);
-        }));
-    }
-
-    private static CompletableFuture<Verdict> lookup(UUID id) {
-        GuardConfig.Values c = GuardConfig.get();
-        HttpRequest req = HttpRequest.newBuilder(URI.create(c.apiBase.replaceAll("/$", "") + "/api/server/players/" + id))
-                .header("x-rift-server-key", c.serverKey).timeout(Duration.ofSeconds(10)).GET().build();
-        return HTTP.sendAsync(req, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8)).thenApply(res -> {
-            if (res.statusCode() != 200) {
-                GuardMod.LOG.error("Account server answered {} for {}; check serverKey", res.statusCode(), id);
-                return (Verdict) null;
-            }
-            JsonObject o = GSON.fromJson(res.body(), JsonObject.class);
-            boolean allowed = o.has("allowed") && o.get("allowed").getAsBoolean();
-            return new Verdict(allowed, str(o, "nick"), str(o, "role"), str(o, "reason"), str(o, "banReason"));
-        }).exceptionally(e -> null);
-    }
-
-    private static String str(JsonObject o, String k) {
-        return o.has(k) && !o.get(k).isJsonNull() ? o.get(k).getAsString() : null;
-    }
-
-    private static void apply(MinecraftServer server, ServerPlayer player, Verdict v) {
+    private static void applyRole(MinecraftServer server, ServerPlayer player, String role) {
         PlayerList list = server.getPlayerList();
-        GameProfile profile = player.getGameProfile();
-        if (!v.allowed()) {
-            CURRENT.remove(player.getUUID());
-            removeManagedOp(list, profile);
-            Component msg = switch (v.reason() == null ? "" : v.reason()) {
-                // literal text: players do not have this server-only mod, so translation keys would show raw
-                case "banned" -> Component.literal("Аккаунт Spell and Iron Rift заблокирован / account banned.\nПричина / reason: "
-                        + (v.banReason() == null || v.banReason().isBlank() ? "—" : v.banReason()));
-                case "unreachable" -> Component.literal("Сервер аккаунтов недоступен, попробуйте через минуту.\nThe account server is unavailable, try again in a minute.");
-                default -> Component.literal("Нужен аккаунт Spell and Iron Rift: зарегистрируйтесь и войдите через лаунчер.\nA Spell and Iron Rift account is required: register in the launcher.");
-            };
-            player.connection.disconnect(msg);
-            GuardMod.LOG.info("Refused {} ({}): {}", profile.getName(), player.getUUID(), v.reason());
-            return;
-        }
-        Verdict before = CURRENT.put(player.getUUID(), v);
-        int level = "admin".equals(v.role()) ? GuardConfig.get().adminOpLevel : "moderator".equals(v.role()) ? GuardConfig.get().moderatorOpLevel : 0;
+        ServerOpListEntry current = list.getOps().get(player.getGameProfile());
+        int level = "admin".equals(role) ? GuardConfig.get().adminOpLevel : "moderator".equals(role) ? GuardConfig.get().moderatorOpLevel : 0;
         String key = player.getUUID().toString();
-        ServerOpListEntry current = list.getOps().get(profile);
         if (level > 0) {
             if (current == null || current.getLevel() != level) {
-                // only touch operators the guard created, never ones the owner added by hand
                 if (current == null || managedOps.contains(key)) {
-                    list.getOps().add(new ServerOpListEntry(profile, level, false));
+                    list.getOps().add(new ServerOpListEntry(player.getGameProfile(), level, false));
                     managedOps.add(key);
-                    save(opsFile(), managedOps);
+                    saveOps();
                     list.sendPlayerPermissionLevel(player);
                 }
             }
         } else {
-            removeManagedOp(list, profile);
+            removeManagedOp(list, player);
             list.sendPlayerPermissionLevel(player);
         }
-        if (before == null || !java.util.Objects.equals(before.nick(), v.nick())) {
-            player.refreshDisplayName();
-            player.refreshTabListName();
+    }
+
+    private static void removeManagedOp(PlayerList list, ServerPlayer player) {
+        if (managedOps.remove(player.getUUID().toString())) {
+            list.getOps().remove(player.getGameProfile());
+            saveOps();
         }
     }
 
-    private static void removeManagedOp(PlayerList list, GameProfile profile) {
-        String key = profile.getId().toString();
-        if (managedOps.remove(key)) {
-            list.getOps().remove(profile);
-            save(opsFile(), managedOps);
-        }
-    }
-
-    private static void save(Path file, Object value) {
+    private static void saveOps() {
         try {
+            Path file = opsFile();
             Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.writeString(tmp, GSON.toJson(value), StandardCharsets.UTF_8);
+            Files.writeString(tmp, GSON.toJson(managedOps), StandardCharsets.UTF_8);
             Files.move(tmp, file, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
         } catch (Exception e) {
-            GuardMod.LOG.warn("Could not save {}: {}", file, e.toString());
+            GuardMod.LOG.warn("Could not save managed operators: {}", e.toString());
         }
+    }
+
+    private static void deny(ServerPlayer player, String message) {
+        PENDING.remove(player.getUUID());
+        CURRENT.remove(player.getUUID());
+        player.connection.disconnect(Component.literal(message));
     }
 }

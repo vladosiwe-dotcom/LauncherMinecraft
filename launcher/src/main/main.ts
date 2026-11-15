@@ -1,14 +1,14 @@
-import { app, BrowserWindow, dialog, ipcMain, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { promises as fs, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { GRAPHICS_PRESETS, recommendPreset, recommendHeapMb, type GraphicsPresetId, type HardwareInfo, type SignedManifest } from '@sir/shared';
 import { RiftApi } from '../core/api.js';
-import { AuthError, MicrosoftAuth, type MinecraftSession } from '../core/auth.js';
+
 import { GameManager } from '../core/game.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
-import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
+import { LocalServer, offlineUuid } from '../core/localserver.js';
 import { RiftAccountError } from '../core/riftaccount.js';
 import { AccountService } from './accounts.js';
 import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
@@ -18,14 +18,13 @@ import os from 'node:os';
 const here = dirname(fileURLToPath(import.meta.url));
 const appRoot = join(here, '..', '..');
 const config = JSON.parse(readFileSync(join(appRoot, 'config', 'app.json'), 'utf8')) as {
-  apiBase: string; azureClientId: string; trustedManifestKeys: string[]; allowInsecureLocalApi: boolean;
+  apiBase: string; trustedManifestKeys: string[]; allowInsecureLocalApi: boolean;
 };
 const VERSION = app.getVersion();
 
 let win: BrowserWindow | null = null;
 let settingsStore: SettingsStore;
 let settings: LauncherSettings;
-let session: MinecraftSession | null = null;
 let hardware: HardwareInfo | null = null;
 let busy: AbortController | null = null;
 let gameRunning = false;
@@ -40,7 +39,9 @@ function myServer(): LocalServer {
   }
   return localServer;
 }
-const serverOptions = () => ({ port: settings.serverPort, memoryMb: settings.serverMemoryMb, testMode: settings.testMode, motd: 'Spell and Iron Rift' });
+// The local server uses offline-mode transport because Rift Guard validates the one-use Rift ticket.
+// settings.testMode controls the client's destination; it must not disable Rift authentication on this server.
+const serverOptions = () => ({ port: settings.serverPort, memoryMb: settings.serverMemoryMb, testMode: true, motd: 'Spell and Iron Rift' });
 let launcherDownload: AbortController | null = null;
 
 const send = (ch: string, payload: unknown) => win?.webContents.send(ch, payload);
@@ -50,51 +51,19 @@ async function log(line: string) {
   await fs.appendFile(logFile(), `[${new Date().toISOString()}] ${line.replace(/accessToken\S*\s+\S+/g, 'accessToken ***')}\n`);
 }
 
-/** Microsoft refresh token, encrypted with the OS keychain (DPAPI / Keychain / libsecret). */
-const vaultPath = () => join(app.getPath('userData'), 'account.bin');
-async function saveRefreshToken(token: string | null) {
-  if (!token) { await fs.rm(vaultPath(), { force: true }); return; }
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('OS secure storage is unavailable; refusing to store the account token in plain text');
-  await fs.writeFile(vaultPath(), safeStorage.encryptString(token));
-}
-async function loadRefreshToken(): Promise<string | null> {
-  try { return safeStorage.decryptString(await fs.readFile(vaultPath())); } catch { return null; }
-}
-
-function auth() { return new MicrosoftAuth(config.azureClientId); }
 function api() { return new RiftApi(config.apiBase); }
 
-async function restoreSession(): Promise<void> {
-  const rt = await loadRefreshToken();
-  if (!rt) return;
-  try {
-    const t = await auth().refresh(rt);
-    await saveRefreshToken(t.refreshToken);
-    session = await auth().minecraftLogin(t.accessToken);
-  } catch (e) {
-    await log(`session restore failed: ${(e as Error).message}`);
-    if (e instanceof AuthError && e.code === 'expired') await saveRefreshToken(null);
-  }
-}
-
-async function ensureFreshSession(): Promise<MinecraftSession> {
-  if (session && session.expiresAt > Date.now()) return session;
-  await restoreSession();
-  if (!session) throw new AuthError('expired');
-  return session;
-}
-
 function publicSession() {
-  return session ? { name: session.name, uuid: session.uuid, skin: session.skin ?? null } : null;
+  const a = accounts?.account;
+  return a ? { name: a.nick, uuid: a.id, skin: null } : null;
 }
 
 function errorPayload(e: unknown) {
   if (e instanceof RiftAccountError) return { code: `account.${e.code}`, message: e.reason ?? e.message };
-  if (e instanceof AuthError) return { code: `auth.${e.code}`, message: e.message };
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
-  for (const c of ['eula', 'server_running', 'server_missing', 'test_nick']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
+  for (const c of ['eula', 'server_running', 'server_missing']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
   if (/ENOSPC/.test(msg)) return { code: 'disk.full', message: msg };
   if (/fetch failed|network|ENOTFOUND|ECONNRE|timed? ?out/i.test(msg)) return { code: 'network', message: msg };
   if (/signature/.test(msg)) return { code: 'manifest.signature', message: msg };
@@ -128,11 +97,6 @@ async function installLauncher(file: string): Promise<'restarting' | 'opened'> {
   return 'opened';
 }
 
-function testProfile() {
-  if (!NICK_RE.test(settings.testNick)) throw Object.assign(new Error('pick a nickname for test mode'), { code: 'test_nick' });
-  return { name: settings.testNick, uuid: offlineUuid(settings.testNick).replace(/-/g, ''), accessToken: '0', xuid: '0' };
-}
-
 function registerIpc() {
   handle('app:state', async () => {
     const st = await new GameManager(settings, config.trustedManifestKeys).updater.loadState();
@@ -142,7 +106,7 @@ function registerIpc() {
   handle('settings:save', async (patch: Partial<LauncherSettings>) => {
     const errs = validateSettings(patch, Math.round(os.totalmem() / 1048576));
     if (errs.length) throw new Error(`invalid settings: ${errs.join(', ')}`);
-    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir'];
+    const allowed: (keyof LauncherSettings)[] = ['memoryMb', 'javaPath', 'jvmArgs', 'width', 'height', 'fullscreen', 'preset', 'presetIsManual', 'language', 'channel', 'closeOnLaunch', 'installDir', 'testMode'];
     for (const k of allowed) if (k in patch) (settings as any)[k] = (patch as any)[k];
     await settingsStore.save(settings);
     return settings;
@@ -157,27 +121,6 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0];
   });
 
-  handle('auth:login', async () => {
-    busy?.abort(); busy = new AbortController();
-    const a = auth();
-    const dc = await a.startDeviceCode();
-    send('auth:code', { userCode: dc.userCode, verificationUri: dc.verificationUri, expiresIn: dc.expiresIn });
-    const t = await a.pollDeviceCode(dc, busy.signal);
-    session = await a.minecraftLogin(t.accessToken);
-    await saveRefreshToken(t.refreshToken);
-    return publicSession();
-  });
-  handle('auth:cancel', async () => { busy?.abort(); return true; });
-  handle('auth:logout', async () => { session = null; await saveRefreshToken(null); return true; });
-
-  handle('skin:upload', async (variant: 'classic' | 'slim') => {
-    const s = await ensureFreshSession();
-    const r = await dialog.showOpenDialog(win!, { properties: ['openFile'], filters: [{ name: 'PNG', extensions: ['png'] }] });
-    if (r.canceled) return null;
-    await MicrosoftAuth.uploadSkin(s.accessToken, await fs.readFile(r.filePaths[0]!), variant);
-    Object.assign(session!, await auth().profile(s.accessToken));
-    return publicSession();
-  });
 
   handle('server:status', () => api().status());
   // "My server": NeoForge server with the same build on this PC
@@ -233,10 +176,8 @@ function registerIpc() {
 
   handle('game:play', async () => {
     if (gameRunning) throw new Error('game already running');
-    // Test mode plays with a nickname on the server on this PC; otherwise a Microsoft account is required.
-    const s = settings.testMode ? testProfile() : await ensureFreshSession();
-    // The project account must be signed in, active and linked to this Minecraft profile (verified by Mojang).
-    if (!settings.testMode) await accounts.readyToPlay({ name: s.name, uuid: s.uuid, accessToken: s.accessToken });
+    // Rift is the only identity provider. The short-lived ticket is passed to the client mod via
+    // the child process environment; it is never written to launcher.json, command-line args or logs.
     busy?.abort(); busy = new AbortController();
     const signed: SignedManifest = await api().manifest(settings.channel);
     const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
@@ -244,7 +185,9 @@ function registerIpc() {
     if (fromGame && fromGame !== settings.preset) { settings.preset = fromGame; settings.presetIsManual = true; await settingsStore.save(settings); }
     const { versionId, javaExe } = await gm.prepare(signed, currentPreset(), (p) => send('progress', p), busy.signal);
     send('progress', { stage: 'launch', done: 0, total: 1 });
-    const child = await gm.launch(versionId, javaExe, { name: s.name, uuid: s.uuid, accessToken: s.accessToken, xuid: s.xuid }, (l) => { void log(`[game] ${l}`); }, VERSION, config.azureClientId);
+    const gameSession = await accounts.createGameSession('main');
+    const profile = { name: gameSession.account.nick, uuid: offlineUuid(gameSession.account.nick).replace(/-/g, ''), accessToken: '0', xuid: '0' };
+    const child = await gm.launch(versionId, javaExe, profile, (l) => { void log(`[game] ${l}`); }, VERSION, gameSession.token);
     gameRunning = true;
     send('game:state', { running: true });
     if (settings.closeOnLaunch) win?.hide();
@@ -268,7 +211,7 @@ function registerIpc() {
   handle('shell:openLogs', async () => shell.openPath(dirname(logFile())));
   handle('shell:openUrl', async (url: string) => {
     const u = new URL(url);
-    const allowed = ['microsoft.com', 'live.com', 'minecraft.net', new URL(config.apiBase).hostname];
+    const allowed = [new URL(config.apiBase).hostname];
     if (u.protocol !== 'https:' || !allowed.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`))) throw new Error('blocked url');
     await shell.openExternal(u.toString());
     return true;
@@ -306,7 +249,7 @@ app.whenReady().then(async () => {
   accounts.register();
   await accounts.restore();
   await createWindow();
-  void restoreSession().then(() => send('auth:session', publicSession()));
+
 });
 app.on('window-all-closed', () => { if (!gameRunning) app.quit(); });
 // Stop "My server" properly on exit so the world is saved.

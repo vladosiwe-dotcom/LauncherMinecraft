@@ -11,7 +11,7 @@ const bearer = (req: Request) => {
   return h.startsWith('Bearer ') ? h.slice(7).trim() : undefined;
 };
 
-/** Launcher-facing API: register, sign in, keep the session, change password, link the Minecraft profile. */
+/** Launcher-facing Rift account API. */
 export function accountRouter(accounts: Accounts): Router {
   const r = express.Router();
   r.use(express.json({ limit: '16kb' }));
@@ -48,20 +48,22 @@ export function accountRouter(accounts: Accounts): Router {
   r.post('/password', authed, wrap(async (req, res) => {
     await accounts.changePassword(me(res), req.body?.current, String(req.body?.next ?? ''), bearer(req)!);
   }));
-  r.post('/link/challenge', authed, wrap(async (_req, res) => ({ serverId: accounts.linkChallenge(me(res)) })));
-  r.post('/link', authed, wrap(async (req, res) => ({ minecraft: await accounts.link(me(res), String(req.body?.minecraftName ?? '')) })));
+  r.post('/game-session', authed, wrap(async (req, res) => accounts.issueGameTicket(bearer(req), String(req.body?.serverId ?? 'main'), req.ip ?? '')));
   return r;
 }
 
-/** Game server API (the guard mod): who is this Mojang-verified player? Requires the server API key. */
+/** Dedicated-server API. A private server key plus a one-use player ticket is required. */
 export function serverApiRouter(accounts: Accounts, serverKey: string): Router {
   const r = express.Router();
+  r.use(express.json({ limit: '8kb' }));
   r.use((req, res, next) => {
     if (!serverKeyMatches(req.header('x-rift-server-key'), serverKey)) return res.status(401).json({ error: 'bad_server_key' });
     res.setHeader('Cache-Control', 'no-store');
     next();
   });
-  r.get('/players/:uuid', wrap(async (req) => accounts.lookupMinecraft(req.params.uuid!)));
+  r.post('/auth/consume', wrap(async (req) => accounts.consumeGameTicket(
+    String(req.body?.ticket ?? ''), String(req.body?.serverId ?? ''), String(req.body?.nick ?? ''),
+  )));
   return r;
 }
 
