@@ -59,7 +59,6 @@ function publicSession() {
 
 function errorPayload(e: unknown) {
   if (e instanceof RiftAccountError) return { code: `account.${e.code}`, message: e.reason ?? e.message };
-  if (e instanceof AuthError) return { code: `auth.${e.code}`, message: e.message };
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
