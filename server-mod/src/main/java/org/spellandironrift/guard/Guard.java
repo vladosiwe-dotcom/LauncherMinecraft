@@ -21,6 +21,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.players.PlayerList;
 import net.minecraft.server.players.ServerOpListEntry;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -29,6 +31,7 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /** Rift-only authentication for offline-mode Minecraft servers. */
+@EventBusSubscriber(modid = GuardMod.MODID, value = Dist.DEDICATED_SERVER)
 public final class Guard {
     private record Verdict(boolean allowed, String nick, String role, String reason, String banReason) {}
     private static final HttpClient HTTP = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
@@ -43,7 +46,6 @@ public final class Guard {
 
     private static Path opsFile() { return GuardConfig.file().resolveSibling("spellironrift-guard-ops.json"); }
 
-    @SubscribeEvent
     public static void registerPayloads(RegisterPayloadHandlersEvent event) {
         event.registrar("1").playToServer(AuthTicketPayload.TYPE, AuthTicketPayload.STREAM_CODEC, Guard::handleTicket);
     }
