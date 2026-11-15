@@ -26,7 +26,7 @@ const httpError = (status: number, message: string, extra: object = {}) => Objec
 
 export interface AppDeps { config: Config; db: Stores; keys: { privatePem: string; publicPem: string; keyId: string }; serverKey?: string }
 
-export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDeps) {
+export function createApp({ config, db, keys, serverKey = '' }: AppDeps) {
   const app = express();
   if (config.trustProxy) app.set('trust proxy', 1);
   app.disable('x-powered-by');
