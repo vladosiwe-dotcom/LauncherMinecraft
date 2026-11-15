@@ -1,11 +1,10 @@
 import { safeStorage } from 'electron';
 import { promises as fs } from 'node:fs';
 import { join } from 'node:path';
-import { RiftAccountApi, RiftAccountError, ensureLinked, type RiftAccount } from '../core/riftaccount.js';
+import { RiftAccountApi, RiftAccountError, type RiftAccount } from '../core/riftaccount.js';
 
 /**
- * Main-process side of Spell and Iron Rift accounts: sign-in state, the session token kept between launches
- * (encrypted with the OS keychain like the Microsoft token), and the IPC the UI uses.
+ * Main-process side of Rift accounts. The long-lived session token is encrypted with OS secure storage.
  */
 export interface AccountDeps {
   apiBase: string;
@@ -58,8 +57,8 @@ export class AccountService {
     }
   }
 
-  /** Before playing: a signed-in, active account linked to the Minecraft profile that is about to play. */
-  async readyToPlay(mc: { name: string; uuid: string; accessToken: string }): Promise<RiftAccount> {
+  /** Issue a one-use game ticket only after the backend re-validates this Rift session. */
+  async createGameSession(serverId = 'main'): Promise<{ token: string; serverId: string; expiresAt: number; account: RiftAccount }> {
     const api = this.need();
     if (!this.token) throw new RiftAccountError('account_required', 401);
     const { account } = await api.me(this.token).catch(async (e) => {
@@ -67,9 +66,10 @@ export class AccountService {
       throw e;
     });
     if (account.mustChangePassword) throw new RiftAccountError('password_change_required', 403);
-    this.account = await ensureLinked(api, this.token, account, mc);
+    const ticket = await api.gameSession(this.token, serverId);
+    this.account = account;
     this.publish();
-    return this.account;
+    return { ...ticket, account };
   }
 
   register() {
