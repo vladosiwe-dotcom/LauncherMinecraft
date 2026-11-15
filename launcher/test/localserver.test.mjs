@@ -1,6 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { offlineUuid, isLocalHost, serverProperties, serverFiles, NICK_RE } from '../dist/core/localserver.js';
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { LocalServer, offlineUuid, isLocalHost, serverProperties, serverFiles, NICK_RE } from '../dist/core/localserver.js';
+import { neoforgeServerArgsFile } from '../dist/core/neoforge.js';
 
 test('offline UUID matches Java UUID.nameUUIDFromBytes("OfflinePlayer:" + name)', () => {
   assert.equal(offlineUuid('Notch'), 'b50ad385-829d-3141-a216-7e7d7539ba7f');
@@ -27,4 +31,25 @@ test('server gets server and both-side files only, never unsafe paths', () => {
 test('nicknames', () => {
   assert.ok(NICK_RE.test('Hunter_01'));
   assert.ok(!NICK_RE.test('ab')); assert.ok(!NICK_RE.test('Имя')); assert.ok(!NICK_RE.test('a'.repeat(17)));
+});
+
+
+test('NeoForge server installer selects the correct argument file for Windows and Unix', () => {
+  assert.equal(neoforgeServerArgsFile('21.1.172', 'win32'), join('libraries', 'net', 'neoforged', 'neoforge', '21.1.172', 'win_args.txt'));
+  assert.equal(neoforgeServerArgsFile('21.1.172', 'linux'), join('libraries', 'net', 'neoforged', 'neoforge', '21.1.172', 'unix_args.txt'));
+});
+
+test('local server refuses to start when the platform-specific NeoForge args file is missing', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rift-local-server-'));
+  const dir = join(root, 'server');
+  try {
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, '.sir-server.json'), JSON.stringify({ neoforge: '21.1.172' }));
+    const server = new LocalServer(root, dir);
+    await server.refreshState();
+    await assert.rejects(server.start('java', { port: 25565, memoryMb: 4096, testMode: true, motd: 'test' }), /server arguments are missing/);
+    assert.equal(server.state, 'stopped');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

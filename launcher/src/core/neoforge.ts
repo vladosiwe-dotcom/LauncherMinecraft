@@ -9,6 +9,11 @@ export const NEOFORGE_MAVEN = 'https://maven.neoforged.net/releases/net/neoforge
 
 export function neoforgeVersionId(version: string) { return `neoforge-${version}`; }
 
+/** Argument file emitted by the NeoForge server installer for the current operating system. */
+export function neoforgeServerArgsFile(version: string, platform: NodeJS.Platform = process.platform): string {
+  return join('libraries', 'net', 'neoforged', 'neoforge', version, platform === 'win32' ? 'win_args.txt' : 'unix_args.txt');
+}
+
 /** Installs the NeoForge client profile with the official installer (headless mode). Idempotent. */
 export async function installNeoForge(root: string, version: string, javaExe: string, log?: (line: string) => void): Promise<string> {
   if (!/^21\.1\.\d+(-beta)?$/.test(version)) throw new Error(`Refusing NeoForge ${version}: only 21.1.x (Minecraft 1.21.1) is supported`);
@@ -48,10 +53,11 @@ export async function downloadNeoForgeInstaller(root: string, version: string): 
 
 /** Installs a NeoForge dedicated server into dir (official installer, headless). Idempotent. */
 export async function installNeoForgeServer(root: string, dir: string, version: string, javaExe: string, log?: (line: string) => void): Promise<void> {
-  if (await fileExists(join(dir, 'libraries', 'net', 'neoforged', 'neoforge', version, 'unix_args.txt'))) return;
+  const argsFile = neoforgeServerArgsFile(version);
+  if (await fileExists(join(dir, argsFile))) return;
   const installer = await downloadNeoForgeInstaller(root, version);
   await fs.mkdir(dir, { recursive: true });
   const { stdout, stderr } = await run(javaExe.replace(/javaw\.exe$/, 'java.exe'), ['-jar', installer, '--install-server', dir], { cwd: dir, maxBuffer: 32 * 1024 * 1024, timeout: 20 * 60 * 1000 });
   stdout.split('\n').concat(stderr.split('\n')).filter(Boolean).forEach((l) => log?.(l));
-  if (!(await fileExists(join(dir, 'libraries', 'net', 'neoforged', 'neoforge', version, 'unix_args.txt')))) throw new Error('NeoForge server installer did not finish');
+  if (!(await fileExists(join(dir, argsFile)))) throw new Error(`NeoForge server installer did not create the required ${argsFile}`);
 }

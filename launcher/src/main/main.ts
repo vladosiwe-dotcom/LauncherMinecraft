@@ -39,6 +39,8 @@ function myServer(): LocalServer {
   }
   return localServer;
 }
+// The local server uses offline-mode transport because Rift Guard validates the one-use Rift ticket.
+// settings.testMode controls the client's destination; it must not disable Rift authentication on this server.
 const serverOptions = () => ({ port: settings.serverPort, memoryMb: settings.serverMemoryMb, testMode: true, motd: 'Spell and Iron Rift' });
 let launcherDownload: AbortController | null = null;
 
