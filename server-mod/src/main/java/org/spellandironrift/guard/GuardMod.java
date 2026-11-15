@@ -13,5 +13,6 @@ public final class GuardMod {
 
     public GuardMod() {
         GuardConfig.load();
+        modBus.addListener(Guard::registerPayloads);
     }
 }
