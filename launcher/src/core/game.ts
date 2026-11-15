@@ -83,12 +83,12 @@ export class GameManager {
     }));
   }
 
-  async launch(versionId: string, javaExe: string, profile: LaunchProfile, onLog: (l: string) => void, launcherVersion: string, clientId: string) {
+  async launch(versionId: string, javaExe: string, profile: LaunchProfile, onLog: (l: string) => void, launcherVersion: string, gameTicket: string) {
     const version = await resolveVersion(new VanillaInstaller(this.root), versionId);
     return launch({
       root: this.root, gameDir: this.gameDir, javaExe, version, profile,
       memoryMb: this.settings.memoryMb, width: this.settings.width, height: this.settings.height, fullscreen: this.settings.fullscreen,
-      extraJvmArgs: this.settings.jvmArgs.split(/\s+/).filter(Boolean), launcherVersion, clientId,
+      extraJvmArgs: this.settings.jvmArgs.split(/\s+/).filter(Boolean), launcherVersion, gameTicket,
     }, onLog);
   }
 
