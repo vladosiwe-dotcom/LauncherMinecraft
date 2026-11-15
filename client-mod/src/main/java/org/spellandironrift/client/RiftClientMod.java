@@ -16,7 +16,7 @@ public final class RiftClientMod {
     public static final Logger LOG = LoggerFactory.getLogger("SpellAndIronRift");
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").playToServer(
+        event.registrar("1").optional().playToServer(
                 org.spellandironrift.client.net.AuthTicketPayload.TYPE,
                 org.spellandironrift.client.net.AuthTicketPayload.STREAM_CODEC,
                 (payload, context) -> { }
