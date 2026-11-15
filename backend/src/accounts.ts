@@ -216,6 +216,24 @@ export class Accounts {
   }
 }
 
+/** Public account projection: never expose password hashes, session data or legacy Minecraft links. */
+export function publicAccount(account: Account) {
+  return {
+    id: account.id,
+    nick: account.nick,
+    role: account.role,
+    status: account.status,
+    mustChangePassword: !!account.mustChangePassword,
+    createdAt: account.createdAt,
+    lastLoginAt: account.lastLoginAt,
+    ...(account.status === 'banned' ? {
+      banReason: account.banReason ?? '',
+      bannedAt: account.bannedAt,
+      bannedBy: account.bannedBy,
+    } : {}),
+  };
+}
+
 /** Constant-time check of the game server's API key. */
 export function serverKeyMatches(given: string | undefined, expected: string): boolean {
   if (!given || !expected) return false;
