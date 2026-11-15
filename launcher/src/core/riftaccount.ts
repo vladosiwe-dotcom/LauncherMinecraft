@@ -2,9 +2,8 @@ import { fetchWithTimeout } from './http.js';
 
 /**
  * Client for Spell and Iron Rift accounts (the project's own nickname + password accounts on the backend).
- * The account is the player's identity in the project: nickname, permanent UUID, role, bans. Playing still
- * uses the official Microsoft sign-in; the account is linked to that Minecraft profile through Mojang's
- * session server, so the game server can trust which account a connecting player belongs to.
+ * The Rift account is the player's identity: nickname, permanent UUID, role and ban state. Game access
+ * uses short-lived one-time tickets verified by the dedicated server.
  */
 export interface RiftAccount {
   id: string;
@@ -12,7 +11,7 @@ export interface RiftAccount {
   role: 'player' | 'moderator' | 'admin';
   status: 'active' | 'banned';
   mustChangePassword: boolean;
-  minecraft: { uuid: string; name: string; linkedAt: string } | null;
+  minecraft?: null;
 }
 
 export class RiftAccountError extends Error {
@@ -47,29 +46,6 @@ export class RiftAccountApi {
   me(token: string) { return this.call<{ account: RiftAccount }>('GET', '/me', undefined, token); }
   logout(token: string) { return this.call<unknown>('POST', '/logout', {}, token); }
   changePassword(token: string, current: string, next: string) { return this.call<unknown>('POST', '/password', { current, next }, token); }
-  linkChallenge(token: string) { return this.call<{ serverId: string }>('POST', '/link/challenge', {}, token); }
-  link(token: string, minecraftName: string) { return this.call<{ minecraft: { uuid: string; name: string } }>('POST', '/link', { minecraftName }, token); }
+  gameSession(token: string, serverId = 'main') { return this.call<{ token: string; serverId: string; expiresAt: number }>('POST', '/game-session', { serverId }, token); }
 }
 
-/**
- * Tells Mojang's session server that this Minecraft session "joins" serverId — the same call the game makes
- * when it connects to an online-mode server. The backend then checks it with hasJoined. The Minecraft access
- * token goes only to Mojang, never to the project's backend.
- */
-export async function joinMojangSession(accessToken: string, uuid: string, serverId: string, base = 'https://sessionserver.mojang.com'): Promise<void> {
-  const r = await fetchWithTimeout(`${base}/session/minecraft/join`, {
-    method: 'POST', timeoutMs: 15000, headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ accessToken, selectedProfile: uuid.replace(/-/g, ''), serverId }),
-  });
-  if (r.status !== 204 && r.status !== 200) throw new RiftAccountError('mojang_join_failed', r.status);
-}
-
-/** Links the Rift account to the signed-in Minecraft profile if it is not linked to it yet. */
-export async function ensureLinked(api: RiftAccountApi, token: string, account: RiftAccount, mc: { name: string; uuid: string; accessToken: string }, join = joinMojangSession): Promise<RiftAccount> {
-  const want = mc.uuid.replace(/-/g, '').toLowerCase();
-  if (account.minecraft && account.minecraft.uuid.replace(/-/g, '') === want) return account;
-  const { serverId } = await api.linkChallenge(token);
-  await join(mc.accessToken, mc.uuid, serverId);
-  await api.link(token, mc.name);
-  return (await api.me(token)).account;
-}
