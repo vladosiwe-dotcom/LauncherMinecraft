@@ -10,7 +10,7 @@ import net.neoforged.fml.loading.FMLPaths;
 
 /**
  * config/spellironrift-guard.json. Created with defaults on first start; the owner fills in apiBase and the
- * server key from Rift Control (Player accounts → Game server key). Until both are set the guard stays off.
+ * server key from Rift Control (Player accounts → Game server key). Until both are set the guard rejects joins.
  */
 public final class GuardConfig {
     public static final class Values {
@@ -21,10 +21,6 @@ public final class GuardConfig {
         /** Operator level for each role (3 = kick/ban/most commands, 4 = everything). */
         public int moderatorOpLevel = 3;
         public int adminOpLevel = 4;
-        /** If the account server cannot be reached, admit players whose last check was positive. */
-        public boolean useCacheWhenOffline = true;
-        /** Seconds between re-checks of online players (bans and role changes take effect without a relog). */
-        public int recheckSeconds = 60;
     }
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().disableHtmlEscaping().create();
