@@ -16,6 +16,8 @@ public final class GuardConfig {
     public static final class Values {
         public String apiBase = "";
         public String serverKey = "";
+        /** Must match the serverId requested by the launcher when issuing its one-use ticket. */
+        public String serverId = "main";
         /** Operator level for each role (3 = kick/ban/most commands, 4 = everything). */
         public int moderatorOpLevel = 3;
         public int adminOpLevel = 4;
