@@ -1,0 +1,14 @@
+[m[33m[04:44:39.692] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval) 
+[04:45:58] [Server thread/INFO] [minecraft/MinecraftServer]: Observer joined the game
+[04:45:58] [Server thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: Observer -> vanilla mode (Air)
+[04:46:01] [Server thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: server start Observer at 1404 ms 1794717961709
+[04:46:09] [Server thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: server end Observer at 1564 ms 1794717969691
+[04:47:03] [Server thread/INFO] [minecraft/MinecraftServer]: Waker joined the game
+[04:47:03] [Server thread/INFO] [co.vl.op.OpenAce/]: Awakening e2e: Waker placed in front of Observer
+[04:47:03] [Server thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: Waker -> vanilla mode (Air)
+[04:47:06] [Server thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: server start Waker at 2703 ms 1794718026642
+[04:47:14] [Server thread/INFO] [co.vl.op.OpenAce/]: Awakening sync: server end Waker at 2863 ms 1794718034636
+[04:47:22] [Server thread/INFO] [minecraft/MinecraftServer]: Waker left the game
+[04:47:29] [Server thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: Observer -> battle mode (Iron Sword)
+[04:47:44] [Server thread/INFO] [co.vl.so.SoloStatus/]: Epic Fight: Observer -> vanilla mode (Oak Planks)
+[04:47:49] [Server thread/INFO] [minecraft/MinecraftServer]: Observer left the game
