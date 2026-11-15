@@ -186,21 +186,8 @@
   </main>
 </div>
 
-<!-- Microsoft device-code sign in -->
-<div class="modal" id="loginModal" hidden role="dialog" aria-modal="true" aria-labelledby="loginTitle">
-  <div class="modal__panel">
-    <h3 id="loginTitle" data-i18n="login.title"></h3>
-    <ol class="steps">
-      <li><span data-i18n="login.step1"></span><button type="button" class="btn" id="loginOpen" data-i18n="login.open"></button><code id="loginUrl"></code></li>
-      <li><span data-i18n="login.step2"></span><div class="code" id="loginCode">— — — —</div><button type="button" class="btn btn--ghost" id="loginCopy" data-i18n="login.copy"></button></li>
-    </ol>
-    <p class="waiting"><span class="spinner" aria-hidden="true"></span><span data-i18n="login.waiting"></span></p>
-    <p class="hint" data-i18n="profile.secure"></p>
-    <button type="button" class="btn btn--ghost" id="loginCancel" data-i18n="play.cancel"></button>
-  </div>
-</div>
-
-<!-- Spell and Iron Rift account: sign in or register (the project's own account, on top of the Minecraft licence) -->
+<!-- Spell and Iron Rift account is the sole player sign-in. -->
+<!-- Spell and Iron Rift account: sign in or register -->
 <div class="authgate" id="authGate" hidden role="dialog" aria-modal="true" aria-labelledby="authTitle">
   <div class="authgate__brand" aria-hidden="true">
     <svg class="authgate__sigil" viewBox="0 0 120 120"><use href="#rift-sigil-big"/></svg>
