@@ -40,7 +40,7 @@ function myServer(): LocalServer {
   }
   return localServer;
 }
-const serverOptions = () => ({ port: settings.serverPort, memoryMb: settings.serverMemoryMb, testMode: settings.testMode, motd: 'Spell and Iron Rift' });
+const serverOptions = () => ({ port: settings.serverPort, memoryMb: settings.serverMemoryMb, testMode: true, motd: 'Spell and Iron Rift' });
 let launcherDownload: AbortController | null = null;
 
 const send = (ch: string, payload: unknown) => win?.webContents.send(ch, payload);
@@ -177,13 +177,6 @@ function registerIpc() {
     if (gameRunning) throw new Error('game already running');
     // Rift is the only identity provider. The short-lived ticket is passed to the client mod via
     // the child process environment; it is never written to launcher.json, command-line args or logs.
-    const gameSession = await accounts.createGameSession('main');
-    const profile = {
-      name: gameSession.account.nick,
-      uuid: offlineUuid(gameSession.account.nick).replace(/-/g, ''),
-      accessToken: '0',
-      xuid: '0',
-    };
     busy?.abort(); busy = new AbortController();
     const signed: SignedManifest = await api().manifest(settings.channel);
     const gm = new GameManager(settings, config.trustedManifestKeys, config.allowInsecureLocalApi, config.apiBase);
@@ -191,6 +184,8 @@ function registerIpc() {
     if (fromGame && fromGame !== settings.preset) { settings.preset = fromGame; settings.presetIsManual = true; await settingsStore.save(settings); }
     const { versionId, javaExe } = await gm.prepare(signed, currentPreset(), (p) => send('progress', p), busy.signal);
     send('progress', { stage: 'launch', done: 0, total: 1 });
+    const gameSession = await accounts.createGameSession('main');
+    const profile = { name: gameSession.account.nick, uuid: offlineUuid(gameSession.account.nick).replace(/-/g, ''), accessToken: '0', xuid: '0' };
     const child = await gm.launch(versionId, javaExe, profile, (l) => { void log(`[game] ${l}`); }, VERSION, gameSession.token);
     gameRunning = true;
     send('game:state', { running: true });
