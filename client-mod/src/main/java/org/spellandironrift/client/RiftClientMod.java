@@ -16,6 +16,11 @@ public final class RiftClientMod {
 
     public RiftClientMod(IEventBus modBus, ModContainer container) {
         RiftConfig.load();
+        modBus.addListener(event -> event.registrar("1").playToServer(
+                org.spellandironrift.client.net.AuthTicketPayload.TYPE,
+                org.spellandironrift.client.net.AuthTicketPayload.STREAM_CODEC,
+                (payload, context) -> { }
+        ));
         modBus.addListener(org.spellandironrift.client.gui.RiftTransition::registerLayers);
         LOG.info("Spell and Iron Rift client loaded; official server {}:{}", RiftConfig.get().serverHost(), RiftConfig.get().serverPort());
     }
