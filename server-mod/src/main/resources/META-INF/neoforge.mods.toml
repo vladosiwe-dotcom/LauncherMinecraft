@@ -8,8 +8,7 @@ version = "${mod_version}"
 displayName = "Spell and Iron Rift Guard"
 authors = "Spell and Iron Rift team"
 description = '''
-Server side of Spell and Iron Rift accounts: lets in only Minecraft profiles linked to an active project
-account, applies the account's role (moderator / admin) and shows the project nickname. Needs online-mode=true.
+Server-side Rift authentication for offline-mode Minecraft servers. Players must connect through the Spell and Iron Rift launcher with a short-lived, one-use Rift game ticket. The server verifies tickets with the Rift backend and applies account roles.
 '''
 # Server-only: players do not need this mod.
 displayTest = "IGNORE_SERVER_VERSION"
