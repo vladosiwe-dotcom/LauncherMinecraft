@@ -67,7 +67,7 @@ export function buildCommand(o: LaunchOptions): { args: string[]; classpath: str
     auth_access_token: o.profile.accessToken,
     clientid: o.clientId ?? '',
     auth_xuid: o.profile.xuid,
-    user_type: 'msa',
+    user_type: 'legacy',
     version_type: 'release',
     natives_directory: join(o.root, 'natives', v.id),
     launcher_name: 'spell-and-iron-rift',
