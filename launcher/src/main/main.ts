@@ -8,7 +8,7 @@ import { RiftApi } from '../core/api.js';
 import { GameManager } from '../core/game.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
-import { LocalServer } from '../core/localserver.js';
+import { LocalServer, offlineUuid } from '../core/localserver.js';
 import { RiftAccountError } from '../core/riftaccount.js';
 import { AccountService } from './accounts.js';
 import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
@@ -185,7 +185,7 @@ function registerIpc() {
     const { versionId, javaExe } = await gm.prepare(signed, currentPreset(), (p) => send('progress', p), busy.signal);
     send('progress', { stage: 'launch', done: 0, total: 1 });
     const gameSession = await accounts.createGameSession('main');
-    const profile = { name: gameSession.account.nick, uuid: gameSession.account.id.replace(/-/g, ''), accessToken: '0', xuid: '0' };
+    const profile = { name: gameSession.account.nick, uuid: offlineUuid(gameSession.account.nick).replace(/-/g, ''), accessToken: '0', xuid: '0' };
     const child = await gm.launch(versionId, javaExe, profile, (l) => { void log(`[game] ${l}`); }, VERSION, gameSession.token);
     gameRunning = true;
     send('game:state', { running: true });
