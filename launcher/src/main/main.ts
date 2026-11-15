@@ -25,7 +25,6 @@ const VERSION = app.getVersion();
 let win: BrowserWindow | null = null;
 let settingsStore: SettingsStore;
 let settings: LauncherSettings;
-let session: { name: string; uuid: string; skin: null } | null = null;
 let hardware: HardwareInfo | null = null;
 let busy: AbortController | null = null;
 let gameRunning = false;
