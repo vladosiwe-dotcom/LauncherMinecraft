@@ -12,7 +12,7 @@ import { installNeoForgeServer } from './neoforge.js';
  * "My server": a NeoForge server on this PC with the same build as the players, run from the launcher.
  * One button installs it (NeoForge server + the build's server-side files), Start/Stop run it, the console
  * shows its log and sends commands. In test mode the server runs without Microsoft checks (online-mode=false)
- * so testers on this PC or local network can join with a nickname.
+ * while the Rift server guard still requires a valid one-use Rift ticket.
  */
 export type ServerState = 'not_installed' | 'stopped' | 'installing' | 'starting' | 'running' | 'stopping';
 
