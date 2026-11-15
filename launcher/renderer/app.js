@@ -76,10 +76,10 @@
   function renderProfileChip() {
     const s = state.session;
     $('#profileChip').innerHTML = s
-      ? `<canvas class="avatar" width="8" height="8" data-avatar></canvas><div><b>${esc(s.name)}</b><small>Microsoft · Java Edition</small></div>`
-      : `<canvas class="avatar" width="8" height="8" data-avatar></canvas><div><b>${t('profile.guest')}</b><button type="button" class="link" id="chipLogin">${t('profile.login')}</button></div>`;
+      ? `<canvas class="avatar" width="8" height="8" data-avatar></canvas><div><b>${esc(s.name)}</b><small>Spell and Iron Rift</small></div>`
+      : `<canvas class="avatar" width="8" height="8" data-avatar></canvas><div><b>${t('profile.guest')}</b><button type="button" class="link" id="chipLogin">${t('acc.login')}</button></div>`;
     $$('[data-avatar]').forEach(drawFace);
-    $('#chipLogin')?.addEventListener('click', login);
+    $('#chipLogin')?.addEventListener('click', () => { setAuthMode('login'); $('#authGate').hidden = false; $('#accNick').focus(); });
   }
 
   function renderPlay() {
@@ -88,9 +88,7 @@
     b.disabled = state.running;
     if (state.running) l.textContent = t('play.running');
     else if (state.busy) l.textContent = t('play.cancel');
-    else if (state.settings?.testMode) l.textContent = t('play.test', { nick: state.settings.testNick || '—' });
     else if (acc.available && !acc.account) l.textContent = t('acc.play.signin');
-    else if (!state.session) l.textContent = t('play.login');
     else if (!state.installed?.buildId) l.textContent = t('play.install');
     else if (state.update && state.update.changes > 0) l.textContent = t('play.update');
     else l.textContent = t('play');
@@ -176,22 +174,14 @@
   async function renderProfileInner() {
     const s = state.session, v = $('#profileView');
     if (!s) {
-      v.innerHTML = `<div class="profile__skin"><canvas width="160" height="320" id="skinFront"></canvas></div><div class="profile__info"><h3>${t('profile.guest')}</h3><p class="hint">${t('profile.license')}</p><p class="hint">${t('profile.secure')}</p><div class="profile__actions"><button type="button" class="btn" id="pLogin">${t('profile.login')}</button></div></div>`;
-      $('#pLogin').onclick = login;
+      v.innerHTML = `<div class="profile__skin"><canvas width="160" height="320" id="skinFront"></canvas></div><div class="profile__info"><h3>${t('profile.guest')}</h3><p class="hint">${t('profile.license')}</p><div class="profile__actions"><button type="button" class="btn btn--gold" id="pLogin">${t('acc.login')}</button></div></div>`;
+      $('#pLogin').onclick = () => { setAuthMode('login'); $('#authGate').hidden = false; $('#accNick').focus(); };
     } else {
-      const slim = s.skin?.variant === 'SLIM';
       v.innerHTML = `<div class="profile__skin"><canvas width="160" height="320" id="skinFront"></canvas></div>
-        <div class="profile__info"><h3>${esc(s.name)}</h3><div class="uuid">UUID ${esc(s.uuid)}</div>
-        <div class="field" style="margin-top:20px"><span class="label">${t('profile.skin')}</span>
-          <div class="segmented"><label><input type="radio" name="variant" value="classic" ${slim ? '' : 'checked'}><span>${t('profile.classic')}</span></label><label><input type="radio" name="variant" value="slim" ${slim ? 'checked' : ''}><span>${t('profile.slim')}</span></label></div></div>
-        <div class="profile__actions"><button type="button" class="btn" id="pSkin">${t('profile.uploadSkin')}</button><button type="button" class="btn btn--ghost" id="pLogout">${t('profile.logout')}</button></div>
+        <div class="profile__info"><h3>${esc(s.name)}</h3><div class="uuid">Rift UUID ${esc(s.uuid)}</div>
         <p class="hint">${t('profile.secure')}</p></div>`;
-      $('#pSkin').onclick = async () => {
-        try { const v2 = $('input[name=variant]:checked').value; const r = await call(sir.uploadSkin(v2)); if (r) { state.session = r; skinCache.clear(); renderProfile(); renderProfileChip(); } } catch (e) { showError(e); }
-      };
-      $('#pLogout').onclick = async () => { await call(sir.logout()); state.session = null; renderAll(); };
     }
-    drawFront($('#skinFront'), s?.skin?.variant === 'SLIM');
+    if (s?.skin?.url) drawFront($('#skinFront'), false); else drawFront($('#skinFront'), false);
   }
 
   function renderAll() { renderProfileChip(); renderPlay(); renderBuild(); renderSettings(); renderProfile(); renderNews(); }
@@ -215,20 +205,6 @@
   }
 
   // ---------- actions ----------
-  let codeOff;
-  async function login() {
-    $('#loginModal').hidden = false;
-    $('#loginCode').textContent = '— — — —';
-    codeOff = sir.onAuthCode((c) => {
-      $('#loginCode').textContent = c.userCode; $('#loginUrl').textContent = c.verificationUri;
-      $('#loginOpen').onclick = () => sir.openUrl(c.verificationUri);
-      $('#loginCopy').onclick = async () => { try { await navigator.clipboard.writeText(c.userCode); $('#loginCopy').textContent = t('login.copied'); } catch { getSelection().selectAllChildren($('#loginCode')); } };
-    });
-    try { state.session = await call(sir.login()); renderAll(); loadUpdate(); }
-    catch (e) { if (e.code !== 'auth.declined') showError(e, login); }
-    finally { $('#loginModal').hidden = true; codeOff?.(); }
-  }
-  $('#loginCancel').onclick = () => { sir.cancelLogin(); $('#loginModal').hidden = true; };
 
   const STAGES = ['java', 'minecraft', 'neoforge', 'pack', 'launch', 'server'];
   sir.onProgress((p) => {
@@ -240,13 +216,10 @@
     $('#progressDetail').textContent = p.stage === 'pack' && p.total > 1000 ? `${fmtBytes(p.done)} / ${fmtBytes(p.total)} · ${p.detail ?? ''}` : (p.detail ?? '');
   });
   sir.onGameState((g) => { state.running = g.running; if (!g.running) loadUpdate(); renderPlay(); });
-  sir.onSession((s) => { state.session = s; renderAll(); });
 
   $('#playBtn').addEventListener('click', async () => {
     if (state.busy) { await sir.cancel(); return; }
-    if (state.settings?.testMode && !/^[A-Za-z0-9_]{3,16}$/.test(state.settings.testNick || '')) { go('server'); $('#testNick').focus(); return; }
-    if (!state.settings?.testMode && acc.available && !acc.account) { renderAuthGate(); return; }
-    if (!state.settings?.testMode && !state.session) { login(); return; }
+    if (acc.available && !acc.account) { renderAuthGate(); return; }
     state.busy = true; renderPlay();
     try { await call(sir.play()); const st = await call(sir.state()); state.installed = st.installed; }
     catch (e) { showError(e, () => $('#playBtn').click()); }
@@ -302,7 +275,7 @@
   $('#openGameDir').addEventListener('click', () => sir.openGameDir());
   $('#openLogs').addEventListener('click', () => sir.openLogs());
 
-  // ---------- Spell and Iron Rift account (sign in / register; Microsoft still provides the game licence) ----------
+  // ---------- Spell and Iron Rift account (sole player identity provider) ----------
   const acc = { available: false, account: null, mode: 'login' };
   const NICK = /^[A-Za-z0-9_]{3,16}$/;
   const pwRules = (pw, nick) => ({ len: pw.length >= 8, mix: /\p{L}/u.test(pw) && /\d/.test(pw), nick: !nick || !pw.toLowerCase().includes(nick.toLowerCase()) });
@@ -331,14 +304,14 @@
     return r;
   }
   function renderAuthGate() {
-    const need = acc.available && !acc.account && !state.settings?.testMode;
+    const need = acc.available && !acc.account;
     $('#authGate').hidden = !need;
     if (need && document.activeElement?.closest?.('#authGate') == null) setTimeout(() => $('#accNick').focus(), 50);
     if (acc.account?.mustChangePassword) openPw(true);
     renderPlay();
   }
   async function loadAccount() {
-    try { const r = await call(sir.account()); acc.available = r.available; acc.account = r.account; } catch { acc.available = false; }
+    try { const r = await call(sir.account()); acc.available = r.available; acc.account = r.account; state.session = acc.account ? { name: acc.account.nick, uuid: acc.account.id, skin: null } : null; } catch { acc.available = false; }
     renderAuthGate();
   }
   $$('[data-authtab]').forEach((b) => b.addEventListener('click', () => setAuthMode(b.dataset.authtab)));
@@ -348,7 +321,6 @@
     $('#accPass').type = on ? 'text' : 'password'; $('#accPass2').type = $('#accPass').type;
     $('#accEye').classList.toggle('is-on', on);
   });
-  $('#accTestMode').addEventListener('click', () => { $('#authGate').hidden = true; go('server'); loadServerView(); });
   $('#authForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const nick = $('#accNick').value.trim(), pw = $('#accPass').value, err = $('#accError');
@@ -362,11 +334,12 @@
     try {
       acc.account = await call(acc.mode === 'register' ? sir.accountRegister(nick, pw) : sir.accountLogin(nick, pw));
       $('#accPass').value = ''; $('#accPass2').value = '';
-      renderAuthGate(); renderProfile();
+      state.session = { name: acc.account.nick, uuid: acc.account.id, skin: null };
+      renderAuthGate(); renderAll();
     } catch (ex) { err.textContent = accError(ex); err.hidden = false; }
     finally { $('#accSubmit').disabled = false; }
   });
-  sir.onAccount?.((a) => { acc.account = a; renderAuthGate(); renderProfile(); });
+  sir.onAccount?.((a) => { acc.account = a; state.session = a ? { name: a.nick, uuid: a.id, skin: null } : null; renderAuthGate(); renderAll(); });
 
   function openPw(forced) {
     $('#pwWhy').textContent = t(forced ? 'acc.pw.forced' : 'acc.pw.why');
@@ -391,7 +364,7 @@
     if (!acc.available) return '';
     if (!a) return `<div class="accountcard"><div class="accountcard__head"><b>${t('acc.title')}</b></div><p class="hint">${t('acc.none')}</p><div class="profile__actions"><button type="button" class="btn btn--gold" id="accOpen">${t('acc.login')}</button></div></div>`;
     return `<div class="accountcard"><div class="accountcard__head"><b>${esc(a.nick)}</b><span class="role role--${a.role}">${t(`acc.role.${a.role}`)}</span></div>
-      <dl><dt>${t('acc.uuid')}</dt><dd class="mono">${esc(a.id)}</dd><dt>${t('acc.minecraft')}</dt><dd>${a.minecraft ? esc(a.minecraft.name) : t('acc.notLinked')}</dd></dl>
+      <dl><dt>${t('acc.uuid')}</dt><dd class="mono">${esc(a.id)}</dd></dl>
       <div class="profile__actions"><button type="button" class="btn" id="accPw">${t('acc.pw.title')}</button><button type="button" class="btn btn--ghost" id="accOut">${t('acc.logout')}</button></div></div>`;
   }
   function bindAccountCard() {
