@@ -8,7 +8,7 @@ import { RiftApi } from '../core/api.js';
 import { GameManager } from '../core/game.js';
 import { SettingsStore, defaultSettings, validateSettings, type LauncherSettings } from '../core/settings.js';
 import { detectHardware } from '../core/sysinfo.js';
-import { LocalServer, NICK_RE, offlineUuid } from '../core/localserver.js';
+import { LocalServer, offlineUuid } from '../core/localserver.js';
 import { RiftAccountError } from '../core/riftaccount.js';
 import { AccountService } from './accounts.js';
 import { checkLauncherUpdate, downloadLauncherUpdate, type LauncherUpdate } from '../core/selfupdate.js';
@@ -62,7 +62,7 @@ function errorPayload(e: unknown) {
   const msg = (e as Error)?.message ?? String(e);
   if ((e as { code?: string })?.code === 'hash') return { code: 'download.hash', message: msg };
   if ((e as { code?: string })?.code === 'game_running') return { code: 'game.running', message: msg };
-  for (const c of ['eula', 'server_running', 'server_missing', 'test_nick']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
+  for (const c of ['eula', 'server_running', 'server_missing']) if ((e as { code?: string })?.code === c) return { code: `myserver.${c}`, message: msg };
   if (/ENOSPC/.test(msg)) return { code: 'disk.full', message: msg };
   if (/fetch failed|network|ENOTFOUND|ECONNRE|timed? ?out/i.test(msg)) return { code: 'network', message: msg };
   if (/signature/.test(msg)) return { code: 'manifest.signature', message: msg };
