@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.spellandironrift.client.config.RiftConfig;
 
-/** Client-only entry point. Everything the mod does is UI; it adds no blocks, items or network packets. */
+/** Client-only entry point. The mod provides the UI and sends the one-use Rift authentication ticket. */
 @Mod(value = RiftClientMod.MODID, dist = Dist.CLIENT)
 public final class RiftClientMod {
     public static final String MODID = "spellironrift";
