@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Auth, COOKIE, hashPassword, passwordProblems, permissionsOf, requirePerm } from './auth.js';
 import { Backups } from './backups.js';
-import { Accounts, mojangHasJoined, type HasJoined } from './accounts.js';
+import { Accounts } from './accounts.js';
 import { accountRouter, adminAccountRoutes, serverApiRouter } from './accountRoutes.js';
 import { Builds, analyzeBuild, syncServerFiles } from './builds.js';
 import type { Config } from './config.js';
@@ -24,7 +24,7 @@ type Handler = (req: Request, res: Response) => Promise<unknown>;
 const wrap = (fn: Handler) => (req: Request, res: Response, next: NextFunction) => fn(req, res).then((r) => { if (!res.headersSent) res.json(r ?? { ok: true }); }).catch(next);
 const httpError = (status: number, message: string, extra: object = {}) => Object.assign(new Error(message), { status, ...extra });
 
-export interface AppDeps { config: Config; db: Stores; keys: { privatePem: string; publicPem: string; keyId: string }; serverKey?: string; hasJoined?: HasJoined }
+export interface AppDeps { config: Config; db: Stores; keys: { privatePem: string; publicPem: string; keyId: string }; serverKey?: string }
 
 export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDeps) {
   const app = express();
@@ -36,7 +36,7 @@ export function createApp({ config, db, keys, serverKey = '', hasJoined }: AppDe
   const proc = new ServerProcess(config.serverDir);
   const backups = new Backups(config.serverDir, join(config.dataDir, 'backups'), proc, config.backupKeep);
 
-  const accounts = new Accounts(db, hasJoined ?? mojangHasJoined(config.sessionServer));
+  const accounts = new Accounts(db);
   const audit = (user: User | undefined, action: string, detail?: string) =>
     db.audit.update((d) => { d.entries.unshift({ at: new Date().toISOString(), user: user?.username ?? 'system', action, detail }); d.entries.length = Math.min(d.entries.length, 5000); });
 
