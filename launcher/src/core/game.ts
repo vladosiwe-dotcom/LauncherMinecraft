@@ -65,7 +65,7 @@ export class GameManager {
     const dir = join(this.gameDir, 'spellironrift');
     await fs.mkdir(dir, { recursive: true });
     await fs.writeFile(join(dir, 'launcher.json'), JSON.stringify({
-      server, offline: this.settings.testMode, apiBase: this.apiBase, language: this.settings.language, preset, buildVersion: m.version, buildId: m.buildId,
+      server, offline: true, apiBase: this.apiBase, language: this.settings.language, preset, buildVersion: m.version, buildId: m.buildId,
     }, null, 2));
     const optPath = join(this.gameDir, 'options.txt');
     const current = await fs.readFile(optPath, 'utf8').catch(() => '');
